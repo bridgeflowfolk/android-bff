@@ -1,0 +1,20 @@
+# Keystores — NE JAMAIS commiter
+*.jks
+*.keystore
+
+# Gradle
+.gradle/
+build/
+app/build/
+
+# Android Studio
+.idea/
+*.iml
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# OS
+.DS_Store
+Thumbs.db

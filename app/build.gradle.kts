@@ -6,27 +6,50 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// ── Version automatique depuis le tag Git (ex: v1.2.3 → code=10203) ────────
+val gitVersionCode: Int by lazy {
+    val tag = System.getenv("GITHUB_REF_NAME") ?: ""
+    val match = Regex("""^v?(\d+)\.(\d+)\.(\d+)$""").find(tag)
+    if (match != null) {
+        val (major, minor, patch) = match.destructured
+        major.toInt() * 10000 + minor.toInt() * 100 + patch.toInt()
+    } else 1
+}
+
+val gitVersionName: String by lazy {
+    System.getenv("GITHUB_REF_NAME")?.removePrefix("v") ?: "dev"
+}
+
 android {
     namespace = "com.bridgeflowfolk.bff"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.bridgeflowfolk.bff"
         minSdk = 26       // Android 8.0 Oreo
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        targetSdk = 35
+        versionCode = gitVersionCode
+        versionName = gitVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
         create("release") {
-            // Variables injectées par GitHub Actions (secrets)
-            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "keystore.jks")
-            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
-            keyAlias = System.getenv("KEY_ALIAS") ?: ""
-            keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+            val keystorePath  = System.getenv("KEYSTORE_PATH")
+            val keystorePass  = System.getenv("KEYSTORE_PASSWORD")
+            val keyAliasName  = System.getenv("KEY_ALIAS")
+            val keyPass       = System.getenv("KEY_PASSWORD")
+
+            // Ne configure la signature que si toutes les vars sont présentes
+            // → évite un crash Gradle en build local sans les secrets
+            if (!keystorePath.isNullOrBlank() && !keystorePass.isNullOrBlank()
+                && !keyAliasName.isNullOrBlank() && !keyPass.isNullOrBlank()) {
+                storeFile     = file(keystorePath)
+                storePassword = keystorePass
+                keyAlias      = keyAliasName
+                keyPassword   = keyPass
+            }
         }
     }
 
@@ -36,9 +59,9 @@ android {
             isDebuggable = true
         }
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled    = true
+            isShrinkResources  = true
+            signingConfig      = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

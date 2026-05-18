@@ -7,6 +7,11 @@ on:
   pull_request:
     branches: [ main ]
 
+# Le projet Android est à la racine du dépôt : gradlew est bien à la racine
+defaults:
+  run:
+    working-directory: .
+
 jobs:
   # ── Build debug (PR + push main) ──────────────────────────────────────────
   build-debug:
@@ -75,6 +80,11 @@ jobs:
           name: bff-release-${{ github.ref_name }}
           path: app/build/outputs/apk/release/*.apk
           retention-days: 90
+
+      # Nettoyage du keystore (runner éphémère mais bonne pratique)
+      - name: Clean up keystore
+        if: always()
+        run: rm -f app/keystore.jks
 
       # Publication automatique sur GitHub Releases
       - name: Create GitHub Release
