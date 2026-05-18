@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!--
+        Icône Facebook redessinée (lettre "f" stylisée sur fond bleu).
+        Forme générique, non soumise à copyright.
+    -->
+
+    <!-- Fond circulaire bleu Facebook -->
+    <path
+        android:fillColor="#1877F2"
+        android:pathData="M12,2 C6.477,2 2,6.477 2,12 C2,17.523 6.477,22 12,22 C17.523,22 22,17.523 22,12 C22,6.477 17.523,2 12,2 Z" />
+
+    <!-- Lettre f blanche -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M15.5,8 L13.5,8 C13.224,8 13,8.224 13,8.5 L13,10 L15.5,10 L15.2,12.5 L13,12.5 L13,19 L10.5,19 L10.5,12.5 L9,12.5 L9,10 L10.5,10 L10.5,8.5 C10.5,6.567 12.067,5 14,5 L15.5,5 L15.5,8 Z" />
+
+</vector>

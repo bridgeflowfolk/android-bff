@@ -1,0 +1,26 @@
+[
+  {
+    "id": "bff-2025-06-15-salon",
+    "title": "Salon Bien-Être & Créateurs – Édition Été 2025",
+    "date": "2025-06-15T10:00:00",
+    "location": "Salle des fêtes, Nogent-le-Roi (28210)",
+    "description": "Retrouvez nos exposants en bien-être, artisans créateurs et producteurs locaux pour une journée conviviale en famille. Entrée libre.",
+    "image": "https://bridgeflowfolk.github.io/assets/images/salon-ete-2025.jpg"
+  },
+  {
+    "id": "bff-2025-09-20-atelier-yoga",
+    "title": "Atelier Yoga & Respiration",
+    "date": "2025-09-20T09:30:00",
+    "location": "Dojo municipal, Nogent-le-Roi",
+    "description": "Séance de yoga doux ouverte à tous les niveaux. Amenez votre tapis. Places limitées à 20 participants.",
+    "image": "https://bridgeflowfolk.github.io/assets/images/atelier-yoga.jpg"
+  },
+  {
+    "id": "bff-2025-12-07-marche-noel",
+    "title": "Marché de Noël BFF",
+    "date": "2025-12-07T11:00:00",
+    "location": "Place de la Mairie, Nogent-le-Roi",
+    "description": "Marché artisanal de Noël avec plus de 30 exposants : bijoux, cosmétiques naturels, déco, alimentation locale. Vin chaud offert !",
+    "image": null
+  }
+]

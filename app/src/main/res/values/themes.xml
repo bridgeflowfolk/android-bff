@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Thème base pour l'Activity avant que Compose prenne la main -->
+    <style name="Theme.BFF" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/forest_green</item>
+        <item name="android:navigationBarColor">@color/warm_beige</item>
+    </style>
+</resources>
