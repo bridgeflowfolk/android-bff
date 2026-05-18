@@ -14,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color // Ajout de l'import ici
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -116,7 +117,7 @@ fun ContactScreen() {
 private fun ContactButton(
     label: String,
     icon: @Composable () -> Unit,
-    containerColor: androidx.compose.ui.graphics.Color,
+    containerColor: Color,
     onClick: () -> Unit
 ) {
     Button(
@@ -132,5 +133,4 @@ private fun ContactButton(
         Text(label, style = MaterialTheme.typography.labelLarge)
     }
 }
-
-private val Color = androidx.compose.ui.graphics.Color
+// Suppression de la déclaration erronée en bas de fichier
