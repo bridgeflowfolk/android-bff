@@ -6,7 +6,7 @@ import android.content.Intent
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import com.bridgeflowfolk.bff.data.local.EventDao
-import com.bridgeflowfolk.bff.data.toDomain // Ajout de l'import direct
+import com.bridgeflowfolk.bff.data.toDomain // On garde l'import de la fonction d'extension
 import com.bridgeflowfolk.bff.domain.EventRepository
 import com.bridgeflowfolk.bff.notifications.NotificationHelper
 import dagger.assisted.Assisted
@@ -35,7 +35,7 @@ class SyncWorker @AssistedInject constructor(
             // 2. Notifie si nouveaux événements
             if (newIds.isNotEmpty()) {
                 val newEvents = newIds.mapNotNull { eventDao.findById(it) }
-                    .map { toDomain(it) } // Utilisation propre de l'import
+                    .map { it.toDomain() } // CORRECTION : Appel en tant que fonction d'extension
                 notificationHelper.notifyNewEvents(newEvents)
             }
 
@@ -116,7 +116,10 @@ class ReminderWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         val id = inputData.getString(SyncWorker.KEY_EVENT_ID) ?: return Result.failure()
         val entity = eventDao.findById(id) ?: return Result.failure()
-        notificationHelper.notifyReminder(toDomain(entity)) // Utilisation propre de l'import
+        
+        // CORRECTION : Appel en tant que fonction d'extension
+        notificationHelper.notifyReminder(entity.toDomain()) 
+        
         return Result.success()
     }
 }
