@@ -1,13 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Permissions -->
+    <!-- Permissions réseau -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" /> <!-- Android 13+ -->
+
+    <!-- Notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Alarmes exactes : maxSdkVersion=32 pour API ≤32, USE_EXACT_ALARM pour API 33+ -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <!-- Reboot + background -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
@@ -32,7 +39,10 @@
             </intent-filter>
         </activity>
 
-        <!-- WorkManager initializer (Hilt) -->
+        <!--
+            WorkManager initializer : on désactive l'auto-init pour laisser
+            Hilt injecter le WorkerFactory custom (AppModules.kt)
+        -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
@@ -44,11 +54,12 @@
                 tools:node="remove" />
         </provider>
 
-        <!-- Canal de notification déclaré dans le code, pas ici -->
-
-        <!-- Receiver pour redémarrer WorkManager après reboot -->
+        <!--
+            BootReceiver : package corrigé → workers.BootReceiver
+            (était incorrectement déclaré sous notifications.BootReceiver)
+        -->
         <receiver
-            android:name=".notifications.BootReceiver"
+            android:name=".workers.BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
