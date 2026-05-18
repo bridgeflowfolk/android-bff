@@ -13,6 +13,7 @@ import com.bridgeflowfolk.bff.BffApplication.Companion.CHANNEL_REMINDERS
 import com.bridgeflowfolk.bff.MainActivity
 import com.bridgeflowfolk.bff.R
 import com.bridgeflowfolk.bff.domain.Event
+import dagger.hilt.android.qualifiers.ApplicationContext // AJOUT : Import requis
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
@@ -21,7 +22,7 @@ import javax.inject.Singleton
 
 @Singleton
 class NotificationHelper @Inject constructor(
-    private val context: Context
+    @ApplicationContext private val context: Context // AJOUT : Annotation @ApplicationContext
 ) {
     private val manager = context.getSystemService(NotificationManager::class.java)
     private val frFormatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
