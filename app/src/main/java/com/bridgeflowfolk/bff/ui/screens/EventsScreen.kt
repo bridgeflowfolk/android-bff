@@ -6,31 +6,25 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox // Nouvel import M3 1.3.0+
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bridgeflowfolk.bff.ui.EventsViewModel
 import com.bridgeflowfolk.bff.ui.components.EventCard
 import com.bridgeflowfolk.bff.ui.components.EmptyState
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EventsScreen(viewModel: EventsViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
-    val pullState = rememberPullToRefreshState()
-
-    // Déclenche le refresh sur pull
-    if (pullState.isRefreshing) {
-        LaunchedEffect(true) {
-            viewModel.refresh()
-            pullState.endRefresh()
-        }
-    }
+    
+    // Gestion manuelle de l'état de rafraîchissement
+    var isRefreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     Column(modifier = Modifier.fillMaxSize()) {
 
@@ -66,11 +60,17 @@ fun EventsScreen(viewModel: EventsViewModel = hiltViewModel()) {
             }
         }
 
-        // ── Contenu principal ───────────────────────────────────────────────
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .nestedScroll(pullState.nestedScrollConnection)
+        // ── Contenu principal (Mise à jour PullToRefreshBox) ────────────────
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                scope.launch {
+                    isRefreshing = true
+                    viewModel.refresh()
+                    isRefreshing = false
+                }
+            },
+            modifier = Modifier.fillMaxSize()
         ) {
             when {
                 state.isLoading && state.events.isEmpty() -> {
@@ -85,7 +85,8 @@ fun EventsScreen(viewModel: EventsViewModel = hiltViewModel()) {
                 else -> {
                     LazyColumn(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         items(state.events, key = { it.id }) { event ->
                             EventCard(event = event)
@@ -93,11 +94,6 @@ fun EventsScreen(viewModel: EventsViewModel = hiltViewModel()) {
                     }
                 }
             }
-
-            PullToRefreshContainer(
-                state = pullState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
         }
     }
 }
