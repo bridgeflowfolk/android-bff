@@ -3,10 +3,12 @@ package com.bridgeflowfolk.bff.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState // Import requis pour le scroll
+import androidx.compose.foundation.verticalScroll     // Import requis pour le scroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox // Nouvel import M3 1.3.0+
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,7 +62,7 @@ fun EventsScreen(viewModel: EventsViewModel = hiltViewModel()) {
             }
         }
 
-        // ── Contenu principal (Mise à jour PullToRefreshBox) ────────────────
+        // ── Contenu principal (PullToRefreshBox) ────────────────────────────
         PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = {
@@ -77,10 +79,18 @@ fun EventsScreen(viewModel: EventsViewModel = hiltViewModel()) {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
                 state.events.isEmpty() -> {
-                    EmptyState(
-                        modifier = Modifier.align(Alignment.Center),
-                        query = state.searchQuery
-                    )
+                    // CORRECTIF : On enveloppe l'état vide dans un conteneur scrollable
+                    // pour que PullToRefreshBox puisse détecter le geste.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        EmptyState(
+                            query = state.searchQuery
+                        )
+                    }
                 }
                 else -> {
                     LazyColumn(
