@@ -123,7 +123,7 @@ private fun buildGame(): GameState {
     )
 }
 
-// ── Ligne droite intelligente avec projection d'axe ───────────────────────────
+// ── Alignement intelligent des axes de sélection ─────────────────────────────
 
 private fun lineCells(r0: Int, c0: Int, r1: Int, c1: Int): List<Pair<Int,Int>> {
     val dr = r1 - r0
@@ -137,7 +137,6 @@ private fun lineCells(r0: Int, c0: Int, r1: Int, c1: Int): List<Pair<Int,Int>> {
     val finalSr: Int
     val finalSc: Int
 
-    // Force l'alignement sur l'axe le plus fort (évite les zigzag involontaires au doigt)
     if (dr == 0 || dc == 0 || abs(dr) == abs(dc)) {
         finalSr = sr
         finalSc = sc
@@ -169,7 +168,7 @@ fun GameScreen() {
     var foundCells by remember { mutableStateOf<Set<Pair<Int,Int>>>(emptySet()) }
     var showRules by remember { mutableStateOf(false) }
 
-    // Timer
+    // Timer global de jeu
     LaunchedEffect(state.won) {
         while (!state.won) {
             delay(1000)
@@ -177,10 +176,10 @@ fun GameScreen() {
         }
     }
 
-    // Victoire auto-detect
+    // Gestion automatique de la condition de victoire
     LaunchedEffect(state.wordStatus) {
         if (state.wordStatus.isNotEmpty() && state.wordStatus.values.all { it } && !state.won) {
-            delay(400)
+            delay(300)
             val sp = state.placed.find { it.word == state.secretWord }
             if (sp != null) foundCells = foundCells + sp.cells.toSet()
             state = state.copy(won = true)
@@ -196,11 +195,11 @@ fun GameScreen() {
     fun onSelectionEnd(cells: List<Pair<Int,Int>>) {
         if (cells.size < 2) return
         
-        // Reconstruction de la chaîne lue
+        // Reconstruction instantanée du mot textuel
         val word = cells.joinToString("") { (r, c) -> state.grid[r][c].toString() }
         val wordRev = word.reversed()
 
-        // Validation par dictionnaire (beaucoup plus robuste et tolérant)
+        // Validation croisée (Droit et Inverse)
         val matchingWord = when {
             state.wordStatus[word] == false -> word
             state.wordStatus[wordRev] == false -> wordRev
@@ -277,7 +276,7 @@ fun GameScreen() {
     }
 }
 
-// ── Score bar ─────────────────────────────────────────────────────────────────
+// ── Barre de score supérieure ────────────────────────────────────────────────
 
 @Composable
 private fun ScoreBar(
@@ -321,7 +320,7 @@ private fun StatChip(label: String, value: String, valueColor: Color = Dark) {
     }
 }
 
-// ── Grille de Jeu Revisitée ──────────────────────────────────────────────────
+// ── Grille Tactile Corrigée (Anti-State-Lag) ──────────────────────────────────
 
 @Composable
 private fun WordGrid(
@@ -343,9 +342,15 @@ private fun WordGrid(
 
         var startCell by remember { mutableStateOf<Pair<Int,Int>?>(null) }
 
+        // CORRECTION : Évite le gel des valeurs capturées dans le pointerInput(Unit)
+        val currentSelection by rememberUpdatedState(selection)
+        val currentOnSelChange by rememberUpdatedState(onSelChange)
+        val currentOnSelEnd by rememberUpdatedState(onSelEnd)
+        val currentCellPxValue by rememberUpdatedState(cellPxValue)
+
         fun cellAt(offset: Offset): Pair<Int,Int> {
-            val col = (offset.x / cellPxValue).toInt().coerceIn(0, GRID_SIZE - 1)
-            val row = (offset.y / cellPxValue).toInt().coerceIn(0, GRID_SIZE - 1)
+            val col = (offset.x / currentCellPxValue).toInt().coerceIn(0, GRID_SIZE - 1)
+            val row = (offset.y / currentCellPxValue).toInt().coerceIn(0, GRID_SIZE - 1)
             return row to col
         }
 
@@ -357,22 +362,22 @@ private fun WordGrid(
                         onDragStart = { offset ->
                             val c = cellAt(offset)
                             startCell = c
-                            onSelChange(listOf(c))
+                            currentOnSelChange(listOf(c))
                         },
                         onDrag = { change, _ ->
-                            change.consume() // CRUCIAL : Bloque le scroll parent pendant le tracé
+                            change.consume()
                             val c = cellAt(change.position)
                             val s = startCell ?: return@detectDragGestures
-                            onSelChange(lineCells(s.first, s.second, c.first, c.second))
+                            currentOnSelChange(lineCells(s.first, s.second, c.first, c.second))
                         },
                         onDragEnd = {
-                            val cur = selection
                             startCell = null
-                            onSelEnd(cur)
+                            // On passe la liste de sélection la plus fraîche
+                            currentOnSelEnd(currentSelection)
                         },
                         onDragCancel = {
                             startCell = null
-                            onSelChange(emptyList())
+                            currentOnSelChange(emptyList())
                         }
                     )
                 }
@@ -426,7 +431,7 @@ private fun WordGrid(
     }
 }
 
-// ── Mot secret ────────────────────────────────────────────────────────────────
+// ── Section du Mot Secret Révélé ─────────────────────────────────────────────
 
 @Composable
 private fun SecretWordRow(word: String, revealCount: Int) {
@@ -475,7 +480,7 @@ private fun SecretWordRow(word: String, revealCount: Int) {
     }
 }
 
-// ── Chips de mots ─────────────────────────────────────────────────────────────
+// ── Liste des mots sous forme de jetons (Chips) ──────────────────────────────
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -522,7 +527,7 @@ private fun WordChips(wordStatus: Map<String, Boolean>) {
     }
 }
 
-// ── Victoire ──────────────────────────────────────────────────────────────────
+// ── Boîte de dialogue : Victoire ──────────────────────────────────────────────
 
 @Composable
 private fun VictoryDialog(secretWord: String, score: Int, elapsed: Int, onNewGame: () -> Unit) {
@@ -573,7 +578,7 @@ private fun VictoryDialog(secretWord: String, score: Int, elapsed: Int, onNewGam
     }
 }
 
-// ── Règles du jeu ─────────────────────────────────────────────────────────────
+// ── Boîte de dialogue : Règles ────────────────────────────────────────────────
 
 @Composable
 private fun RulesDialog(onDismiss: () -> Unit) {
