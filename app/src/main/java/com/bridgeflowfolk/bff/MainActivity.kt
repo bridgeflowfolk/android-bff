@@ -15,7 +15,6 @@ import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -29,7 +28,6 @@ import com.bridgeflowfolk.bff.ui.theme.BffTheme
 import com.bridgeflowfolk.bff.workers.SyncWorker
 import dagger.hilt.android.AndroidEntryPoint
 
-// ─── Routes ──────────────────────────────────────────────────────────────────
 sealed class Screen(val route: String, val label: String) {
     object Events  : Screen("events",  "Événements")
     object About   : Screen("about",   "À propos")
@@ -42,20 +40,16 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Démarre la sync périodique WorkManager
         SyncWorker.schedule(this)
 
         setContent {
             BffTheme {
-                // Demande permission notifications (Android 13+)
                 RequestNotificationPermission()
 
                 val navController = rememberNavController()
-                val navBackStack by navController.currentBackStackEntryAsState()
-                val currentDest = navBackStack?.destination
-
-                val bottomItems = listOf(Screen.Events, Screen.About, Screen.Contact)
+                val navBackStack  by navController.currentBackStackEntryAsState()
+                val currentDest   = navBackStack?.destination
+                val bottomItems   = listOf(Screen.Events, Screen.About, Screen.Contact)
 
                 Scaffold(
                     topBar = {
@@ -77,7 +71,6 @@ class MainActivity : ComponentActivity() {
                             bottomItems.forEach { screen ->
                                 val selected = currentDest?.hierarchy
                                     ?.any { it.route == screen.route } == true
-
                                 NavigationBarItem(
                                     selected = selected,
                                     onClick = {
@@ -86,7 +79,7 @@ class MainActivity : ComponentActivity() {
                                                 saveState = true
                                             }
                                             launchSingleTop = true
-                                            restoreState = true
+                                            restoreState    = true
                                         }
                                     },
                                     icon = {
@@ -103,9 +96,9 @@ class MainActivity : ComponentActivity() {
                     }
                 ) { innerPadding ->
                     NavHost(
-                        navController = navController,
+                        navController    = navController,
                         startDestination = Screen.Events.route,
-                        modifier = Modifier.padding(innerPadding)
+                        modifier         = Modifier.padding(innerPadding)
                     ) {
                         composable(Screen.Events.route)  { EventsScreen() }
                         composable(Screen.About.route)   { AboutScreen() }
@@ -123,9 +116,6 @@ private fun RequestNotificationPermission() {
         val launcher = rememberLauncherForActivityResult(
             ActivityResultContracts.RequestPermission()
         ) { /* résultat ignoré : l'app fonctionne sans notifs */ }
-
-        LaunchedEffect(Unit) {
-            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
+        LaunchedEffect(Unit) { launcher.launch(Manifest.permission.POST_NOTIFICATIONS) }
     }
 }

@@ -28,34 +28,29 @@ class EventRepositoryImpl @Inject constructor(
     override suspend fun syncFromNetwork(): List<String> {
         val remote = api.getEvents()
         val existingIds = dao.allIds().toSet()
-
-        // Insère uniquement les nouveaux (IGNORE = pas d'écrasement des existants)
         dao.insertNew(remote.map { it.toEntity() })
-
-        return remote
-            .map { it.id }
-            .filter { it !in existingIds }
+        return remote.map { it.id }.filter { it !in existingIds }
     }
 }
-
-// ─── Mappers ─────────────────────────────────────────────────────────────────
 
 private val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
 
 fun EventDto.toEntity() = EventEntity(
-    id = id,
-    title = title,
-    date = date,
-    location = location,
+    id          = id,
+    title       = title,
+    date        = date,
+    location    = location,
     description = description,
-    imageUrl = image
+    imageUrl    = image,
+    eventUrl    = url                  // propagation du champ url
 )
 
 fun EventEntity.toDomain() = Event(
-    id = id,
-    title = title,
-    dateTime = LocalDateTime.parse(date, formatter),
-    location = location,
+    id          = id,
+    title       = title,
+    dateTime    = LocalDateTime.parse(date, formatter),
+    location    = location,
     description = description,
-    imageUrl = imageUrl
+    imageUrl    = imageUrl,
+    eventUrl    = eventUrl             // propagation
 )

@@ -3,43 +3,36 @@ package com.bridgeflowfolk.bff.data.local
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
-// ─── Entité Room ─────────────────────────────────────────────────────────────
-
 @Entity(tableName = "events")
 data class EventEntity(
     @PrimaryKey val id: String,
     val title: String,
-    val date: String,           // stocké en ISO 8601
+    val date: String,
     val location: String,
     val description: String,
     val imageUrl: String?,
-    val notified: Boolean = false,      // rappel 2h planifié ?
+    val eventUrl: String? = null,                  // URL dédiée (nullable)
+    val notified: Boolean = false,
     val reminderScheduled: Boolean = false
 )
-
-// ─── DAO ─────────────────────────────────────────────────────────────────────
 
 @Dao
 interface EventDao {
 
-    /** Flux réactif pour l'UI — tri chronologique */
     @Query("SELECT * FROM events ORDER BY date ASC")
     fun observeAll(): Flow<List<EventEntity>>
 
-    /** Recherche sur titre ET lieu */
     @Query("""
         SELECT * FROM events
-        WHERE title LIKE '%' || :q || '%'
+        WHERE title    LIKE '%' || :q || '%'
            OR location LIKE '%' || :q || '%'
         ORDER BY date ASC
     """)
     fun search(q: String): Flow<List<EventEntity>>
 
-    /** Récupère les IDs déjà connus (pour détecter les nouveaux) */
     @Query("SELECT id FROM events")
     suspend fun allIds(): List<String>
 
-    /** Upsert : insère ou remplace silencieusement */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertNew(events: List<EventEntity>): List<Long>
 
@@ -56,9 +49,8 @@ interface EventDao {
     suspend fun markReminderScheduled(id: String)
 }
 
-// ─── Database ────────────────────────────────────────────────────────────────
-
-@Database(entities = [EventEntity::class], version = 1, exportSchema = false)
+// Version 2 : ajout du champ eventUrl
+@Database(entities = [EventEntity::class], version = 2, exportSchema = false)
 abstract class BffDatabase : RoomDatabase() {
     abstract fun eventDao(): EventDao
 }

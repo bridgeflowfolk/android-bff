@@ -2,21 +2,44 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Permissions réseau -->
+    <!-- Réseau -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Alarmes exactes : maxSdkVersion=32 pour API ≤32, USE_EXACT_ALARM pour API 33+ -->
+    <!-- Alarmes exactes -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
-    <!-- Reboot + background -->
+    <!-- Background -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!-- Queries pour résolution d'intent (navigation, partage) -->
+    <queries>
+        <!-- Waze -->
+        <package android:name="com.waze" />
+        <!-- Google Maps -->
+        <package android:name="com.google.android.apps.maps" />
+        <!-- Apps mail génériques -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="mailto" />
+        </intent>
+        <!-- Apps navigation waze:// -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="waze" />
+        </intent>
+        <!-- Apps navigation geo:// -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="geo" />
+        </intent>
+    </queries>
 
     <application
         android:name=".BffApplication"
@@ -28,7 +51,6 @@
         android:usesCleartextTraffic="false"
         android:networkSecurityConfig="@xml/network_security_config">
 
-        <!-- Activité principale -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -39,10 +61,7 @@
             </intent-filter>
         </activity>
 
-        <!--
-            WorkManager initializer : on désactive l'auto-init pour laisser
-            Hilt injecter le WorkerFactory custom (AppModules.kt)
-        -->
+        <!-- Désactive l'auto-init WorkManager pour laisser Hilt injecter la factory -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
@@ -54,10 +73,6 @@
                 tools:node="remove" />
         </provider>
 
-        <!--
-            BootReceiver : package corrigé → workers.BootReceiver
-            (était incorrectement déclaré sous notifications.BootReceiver)
-        -->
         <receiver
             android:name=".workers.BootReceiver"
             android:exported="true">

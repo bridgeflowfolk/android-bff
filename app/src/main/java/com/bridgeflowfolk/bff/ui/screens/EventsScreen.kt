@@ -3,9 +3,10 @@ package com.bridgeflowfolk.bff.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState // Import requis pour le scroll
-import androidx.compose.foundation.verticalScroll     // Import requis pour le scroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -15,35 +16,53 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bridgeflowfolk.bff.ui.EventsViewModel
-import com.bridgeflowfolk.bff.ui.components.EventCard
 import com.bridgeflowfolk.bff.ui.components.EmptyState
+import com.bridgeflowfolk.bff.ui.components.EventCard
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EventsScreen(viewModel: EventsViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
-    
-    // Gestion manuelle de l'état de rafraîchissement
     var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Column(modifier = Modifier.fillMaxSize()) {
 
-        // ── Barre de recherche ──────────────────────────────────────────────
-        OutlinedTextField(
-            value = state.searchQuery,
-            onValueChange = viewModel::onSearchQueryChange,
-            placeholder = { Text("Rechercher un événement…") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            singleLine = true,
+        // ── Barre recherche + filtre ──────────────────────────────────────
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            shape = MaterialTheme.shapes.large
-        )
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedTextField(
+                value = state.searchQuery,
+                onValueChange = viewModel::onSearchQueryChange,
+                placeholder = { Text("Rechercher…") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                shape = MaterialTheme.shapes.large
+            )
 
-        // ── Erreur réseau ───────────────────────────────────────────────────
+            // Bouton filtre "masquer les passés"
+            FilterChip(
+                selected = state.hidePassedEvents,
+                onClick = { viewModel.onToggleHidePassedEvents(!state.hidePassedEvents) },
+                label = { Text("À venir") },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.FilterList,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            )
+        }
+
+        // ── Erreur réseau ─────────────────────────────────────────────────
         state.error?.let { msg ->
             Card(
                 colors = CardDefaults.cardColors(
@@ -62,7 +81,7 @@ fun EventsScreen(viewModel: EventsViewModel = hiltViewModel()) {
             }
         }
 
-        // ── Contenu principal (PullToRefreshBox) ────────────────────────────
+        // ── Contenu principal ─────────────────────────────────────────────
         PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = {
@@ -79,17 +98,13 @@ fun EventsScreen(viewModel: EventsViewModel = hiltViewModel()) {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
                 state.events.isEmpty() -> {
-                    // CORRECTIF : On enveloppe l'état vide dans un conteneur scrollable
-                    // pour que PullToRefreshBox puisse détecter le geste.
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState()),
                         contentAlignment = Alignment.Center
                     ) {
-                        EmptyState(
-                            query = state.searchQuery
-                        )
+                        EmptyState(query = state.searchQuery)
                     }
                 }
                 else -> {
