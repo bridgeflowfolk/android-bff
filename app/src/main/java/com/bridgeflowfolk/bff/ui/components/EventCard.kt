@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -37,6 +38,7 @@ fun EventCard(event: Event, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var descriptionExpanded by remember { mutableStateOf(false) }
     val isPast = event.dateTime.isBefore(java.time.LocalDateTime.now())
+    val hasUrl = !event.eventUrl.isNullOrBlank()
 
     Card(
         modifier = modifier
@@ -83,14 +85,40 @@ fun EventCard(event: Event, modifier: Modifier = Modifier) {
                     }
                 }
 
-                // ── Titre ─────────────────────────────────────────────────────
-                Text(
-                    text = event.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                // ── Titre (cliquable si eventUrl présent) ─────────────────────
+                if (hasUrl) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = event.title,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                textDecoration = TextDecoration.Underline
+                            ),
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { openUrl(context, event.eventUrl!!) }
+                        )
+                        Icon(
+                            imageVector = Icons.Default.OpenInNew,
+                            contentDescription = "Ouvrir le site",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                } else {
+                    Text(
+                        text = event.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
                 Spacer(Modifier.height(8.dp))
 
@@ -158,21 +186,18 @@ fun EventCard(event: Event, modifier: Modifier = Modifier) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Agenda
                     EventActionButton(
                         icon = Icons.Default.CalendarMonth,
                         label = "Agenda",
                         modifier = Modifier.weight(1f),
                         onClick = { addToCalendar(context, event) }
                     )
-                    // Partager
                     EventActionButton(
                         icon = Icons.Default.Share,
                         label = "Partager",
                         modifier = Modifier.weight(1f),
                         onClick = { shareEvent(context, event) }
                     )
-                    // Itinéraire
                     EventActionButton(
                         icon = Icons.Default.Navigation,
                         label = "Itinéraire",
@@ -208,18 +233,28 @@ private fun EventActionButton(
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
 
+private fun openUrl(context: Context, url: String) {
+    val uri = if (url.startsWith("http")) Uri.parse(url) else Uri.parse("https://$url")
+    context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+}
+
 private fun addToCalendar(context: Context, event: Event) {
     val startMs = event.dateTime
         .atZone(ZoneId.systemDefault())
         .toInstant()
         .toEpochMilli()
-    val endMs = startMs + 2 * 60 * 60 * 1000L // durée par défaut 2h
+    val endMs = startMs + 2 * 60 * 60 * 1000L
 
     val intent = Intent(Intent.ACTION_INSERT).apply {
         data = CalendarContract.Events.CONTENT_URI
         putExtra(CalendarContract.Events.TITLE, event.title)
         putExtra(CalendarContract.Events.EVENT_LOCATION, event.location)
-        putExtra(CalendarContract.Events.DESCRIPTION, event.description)
+        putExtra(CalendarContract.Events.DESCRIPTION,
+            buildString {
+                append(event.description)
+                event.eventUrl?.let { append("\n\n$it") }
+            }
+        )
         putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, startMs)
         putExtra(CalendarContract.EXTRA_EVENT_END_TIME, endMs)
     }
@@ -231,8 +266,6 @@ private fun shareEvent(context: Context, event: Event) {
         DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
             .withLocale(Locale.FRANCE)
     )
-    // URL dédiée à l'événement si le champ "url" est présent dans le JSON,
-    // sinon fallback vers le site de l'association
     val url = event.eventUrl?.takeIf { it.isNotBlank() }
         ?: "https://bridgeflowfolk.github.io"
     val text = buildString {
@@ -252,7 +285,6 @@ private fun shareEvent(context: Context, event: Event) {
 
 private fun openNavigation(context: Context, event: Event) {
     val encoded = URLEncoder.encode(event.location, "UTF-8")
-    // Tente Waze en priorité, fallback Google Maps
     val wazeUri  = Uri.parse("waze://?q=$encoded&navigate=yes")
     val mapsUri  = Uri.parse("https://maps.google.com/?q=$encoded")
 

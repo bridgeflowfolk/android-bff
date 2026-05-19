@@ -28,7 +28,17 @@ class EventRepositoryImpl @Inject constructor(
     override suspend fun syncFromNetwork(): List<String> {
         val remote = api.getEvents()
         val existingIds = dao.allIds().toSet()
-        dao.insertNew(remote.map { it.toEntity() })
+
+        // Préserver reminderScheduled pour les événements déjà connus
+        val entities = remote.map { dto ->
+            val existing = dao.findById(dto.id)
+            dto.toEntity().copy(
+                notified          = existing?.notified          ?: false,
+                reminderScheduled = existing?.reminderScheduled ?: false
+            )
+        }
+        dao.upsertAll(entities)
+
         return remote.map { it.id }.filter { it !in existingIds }
     }
 }
@@ -42,7 +52,7 @@ fun EventDto.toEntity() = EventEntity(
     location    = location,
     description = description,
     imageUrl    = image,
-    eventUrl    = url                  // propagation du champ url
+    eventUrl    = url
 )
 
 fun EventEntity.toDomain() = Event(
@@ -52,5 +62,5 @@ fun EventEntity.toDomain() = Event(
     location    = location,
     description = description,
     imageUrl    = imageUrl,
-    eventUrl    = eventUrl             // propagation
+    eventUrl    = eventUrl
 )

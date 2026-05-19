@@ -2,6 +2,8 @@ package com.bridgeflowfolk.bff.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.bridgeflowfolk.bff.data.EventRepositoryImpl
 import com.bridgeflowfolk.bff.data.UserPreferencesRepositoryImpl
 import com.bridgeflowfolk.bff.data.local.BffDatabase
@@ -15,38 +17,13 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
-private const val BASE_URL = "https://bridgeflowfolk.github.io/"
-
-@Module
-@InstallIn(SingletonComponent::class)
-object NetworkModule {
-
-    @Provides @Singleton
-    fun provideOkHttp(): OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .addInterceptor(HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
-        })
-        .build()
-
-    @Provides @Singleton
-    fun provideRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
-        .baseUrl(BASE_URL)
-        .client(client)
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
-
-    @Provides @Singleton
-    fun provideBffApi(retrofit: Retrofit): BffApiService =
-        retrofit.create(BffApiService::class.java)
+// Migration 2→3 : le schéma est identique, Room a juste besoin d'une migration déclarée
+private val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) { /* aucun changement DDL */ }
 }
 
 @Module
@@ -55,12 +32,27 @@ object DatabaseModule {
 
     @Provides @Singleton
     fun provideDatabase(@ApplicationContext ctx: Context): BffDatabase =
-        Room.databaseBuilder(ctx, BffDatabase::class.java, "bff_events.db")
-            .fallbackToDestructiveMigration()
+        Room.databaseBuilder(ctx, BffDatabase::class.java, "bff.db")
+            .addMigrations(MIGRATION_2_3)
+            .fallbackToDestructiveMigrationFrom(1)   // v1 → v2 était destructive (acceptable)
             .build()
 
-    @Provides
-    fun provideEventDao(db: BffDatabase): EventDao = db.eventDao()
+    @Provides fun provideEventDao(db: BffDatabase): EventDao = db.eventDao()
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+object NetworkModule {
+
+    @Provides @Singleton
+    fun provideRetrofit(): Retrofit = Retrofit.Builder()
+        .baseUrl("https://bridgeflowfolk.github.io/")
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+
+    @Provides @Singleton
+    fun provideApiService(retrofit: Retrofit): BffApiService =
+        retrofit.create(BffApiService::class.java)
 }
 
 @Module
@@ -71,5 +63,5 @@ abstract class RepositoryModule {
     abstract fun bindEventRepository(impl: EventRepositoryImpl): EventRepository
 
     @Binds @Singleton
-    abstract fun bindUserPreferencesRepository(impl: UserPreferencesRepositoryImpl): UserPreferencesRepository
+    abstract fun bindUserPrefsRepository(impl: UserPreferencesRepositoryImpl): UserPreferencesRepository
 }

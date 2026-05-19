@@ -8,6 +8,7 @@ import com.bridgeflowfolk.bff.domain.UserPreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
@@ -33,6 +34,14 @@ class EventsViewModel @Inject constructor(
     private val _error            = MutableStateFlow<String?>(null)
     private val _hidePassedEvents = MutableStateFlow(false)
 
+    // Ticker toutes les minutes : force le recalcul du filtre "passés" sans refresh réseau
+    private val _minuteTicker: Flow<Unit> = flow {
+        while (true) {
+            emit(Unit)
+            delay(60_000L)
+        }
+    }.shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000))
+
     val uiState: StateFlow<EventsUiState> = combine(
         _searchQuery
             .debounce(300)
@@ -43,8 +52,9 @@ class EventsViewModel @Inject constructor(
         _isLoading,
         _error,
         _searchQuery,
-        _hidePassedEvents
-    ) { events, loading, error, query, hideP ->
+        _hidePassedEvents,
+        _minuteTicker   // déclencheur temporel
+    ) { events, loading, error, query, hideP, _ ->
         val filtered = if (hideP) {
             val now = LocalDateTime.now()
             events.filter { it.dateTime.isAfter(now) }
@@ -66,18 +76,25 @@ class EventsViewModel @Inject constructor(
 
     fun onToggleHidePassedEvents(hide: Boolean) { _hidePassedEvents.value = hide }
 
-    fun refresh() {
-        viewModelScope.launch {
-            _isLoading.value = true
-            _error.value = null
-            try {
-                repository.syncFromNetwork()
-            } catch (e: Exception) {
-                _error.value = "Impossible de synchroniser. Vérifiez votre connexion."
-            } finally {
-                _isLoading.value = false
-            }
+    /**
+     * Suspend jusqu'à la fin du sync réseau.
+     * PullToRefreshBox peut thus attendre la vraie fin avant de masquer le spinner.
+     */
+    suspend fun refreshSuspending() {
+        _isLoading.value = true
+        _error.value = null
+        try {
+            repository.syncFromNetwork()
+        } catch (e: Exception) {
+            _error.value = "Impossible de synchroniser. Vérifiez votre connexion."
+        } finally {
+            _isLoading.value = false
         }
+    }
+
+    /** Version non-suspending conservée pour l'init */
+    fun refresh() {
+        viewModelScope.launch { refreshSuspending() }
     }
 
     init { refresh() }
@@ -87,7 +104,8 @@ class EventsViewModel @Inject constructor(
 
 data class NotifPrefsUiState(
     val syncIntervalHours: Float = 6f,
-    val reminderHoursBefore: Float = 2f
+    val reminderHoursBefore: Float = 2f,
+    val notificationsEnabled: Boolean = true
 )
 
 @HiltViewModel
@@ -96,7 +114,7 @@ class NotifPrefsViewModel @Inject constructor(
 ) : ViewModel() {
 
     val uiState: StateFlow<NotifPrefsUiState> = prefsRepository.prefsFlow
-        .map { NotifPrefsUiState(it.syncIntervalHours, it.reminderHoursBefore) }
+        .map { NotifPrefsUiState(it.syncIntervalHours, it.reminderHoursBefore, it.notificationsEnabled) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -109,5 +127,9 @@ class NotifPrefsViewModel @Inject constructor(
 
     fun setReminderHoursBefore(hours: Float) {
         viewModelScope.launch { prefsRepository.setReminderHoursBefore(hours) }
+    }
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        viewModelScope.launch { prefsRepository.setNotificationsEnabled(enabled) }
     }
 }

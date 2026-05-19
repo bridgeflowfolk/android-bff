@@ -83,11 +83,12 @@ fun EventsScreen(viewModel: EventsViewModel = hiltViewModel()) {
 
         // ── Contenu principal ─────────────────────────────────────────────
         PullToRefreshBox(
+            // Bug fix : isRefreshing est couplé à la vraie fin du suspend refreshSuspending()
             isRefreshing = isRefreshing,
             onRefresh = {
                 scope.launch {
                     isRefreshing = true
-                    viewModel.refresh()
+                    viewModel.refreshSuspending()   // suspend → attend la vraie fin
                     isRefreshing = false
                 }
             },
