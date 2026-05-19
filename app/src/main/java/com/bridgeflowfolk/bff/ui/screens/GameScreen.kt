@@ -1,5 +1,7 @@
 package com.bridgeflowfolk.bff.ui.screens
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -327,16 +329,14 @@ private fun WordGrid(
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
         val cellPx = ((maxWidth - 12.dp) / GRID_SIZE).coerceAtMost(36.dp)
-
-        // CORRECTION 1 : On récupère la densité courante correctement
-        val density = LocalDensity.current 
+        
+        val density = LocalDensity.current
         val cellPxValue = with(density) { cellPx.toPx() }
 
-        // CORRECTION 2 : On supprime 'cellPositions' qui était déclaré mais jamais utilisé
         var startCell by remember { mutableStateOf<Pair<Int,Int>?>(null) }
 
-        fun cellAt(offset: Offset): Pair<Int,Int>? {
-            // CORRECTION 3 : Utilisation de cellPxValue pré-calculé
+        // CORRECTION : Suppression du "?" pour rendre le retour non-nullable
+        fun cellAt(offset: Offset): Pair<Int,Int> {
             val col = (offset.x / cellPxValue).toInt().coerceIn(0, GRID_SIZE - 1)
             val row = (offset.y / cellPxValue).toInt().coerceIn(0, GRID_SIZE - 1)
             return row to col
@@ -349,7 +349,7 @@ private fun WordGrid(
                         onDragStart = { offset ->
                             val c = cellAt(offset)
                             startCell = c
-                            onSelChange(listOfNotNull(c))
+                            onSelChange(listOf(c))
                         },
                         onDrag = { change, _ ->
                             val c = cellAt(change.position)
@@ -396,6 +396,7 @@ private fun WordGrid(
                         Box(
                             modifier = Modifier
                                 .size(cellPx)
+                                // CORRECTION : Maintenant reconnu grâce à l'import
                                 .graphicsLayer { scaleX = scale; scaleY = scale }
                                 .clip(RoundedCornerShape(5.dp))
                                 .background(bgColor)
@@ -468,6 +469,7 @@ private fun SecretWordRow(word: String, revealCount: Int) {
 
 // ── Chips de mots ─────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalLayoutApi::class) // <-- CORRECTION : Permet d'utiliser FlowRow
 @Composable
 private fun WordChips(wordStatus: Map<String, Boolean>) {
     Column(modifier = Modifier.padding(horizontal = 12.dp).fillMaxWidth()) {
@@ -511,7 +513,6 @@ private fun WordChips(wordStatus: Map<String, Boolean>) {
         }
     }
 }
-
 // ── Victoire ──────────────────────────────────────────────────────────────────
 
 @Composable
