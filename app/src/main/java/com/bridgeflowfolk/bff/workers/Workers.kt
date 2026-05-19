@@ -6,17 +6,19 @@ import android.content.Intent
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import com.bridgeflowfolk.bff.data.local.EventDao
-import com.bridgeflowfolk.bff.data.toDomain // On garde l'import de la fonction d'extension
+import com.bridgeflowfolk.bff.data.toDomain
 import com.bridgeflowfolk.bff.domain.EventRepository
+import com.bridgeflowfolk.bff.domain.UserPreferencesRepository
 import com.bridgeflowfolk.bff.notifications.NotificationHelper
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.flow.first
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
-// ─── SyncWorker : synchronisation toutes les 6h ──────────────────────────────
+// ─── SyncWorker : synchronisation périodique (durée configurable) ─────────────
 
 @HiltWorker
 class SyncWorker @AssistedInject constructor(
@@ -24,38 +26,35 @@ class SyncWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val repository: EventRepository,
     private val notificationHelper: NotificationHelper,
-    private val eventDao: EventDao
+    private val eventDao: EventDao,
+    private val prefsRepository: UserPreferencesRepository
 ) : CoroutineWorker(ctx, params) {
 
     override suspend fun doWork(): Result {
         return try {
-            // 1. Sync réseau → Room, récupère les IDs nouveaux
             val newIds = repository.syncFromNetwork()
 
-            // 2. Notifie si nouveaux événements
             if (newIds.isNotEmpty()) {
-                val newEvents = newIds.mapNotNull { eventDao.findById(it) }
-                    .map { it.toDomain() } // CORRECTION : Appel en tant que fonction d'extension
+                val newEvents = newIds.mapNotNull { eventDao.findById(it) }.map { it.toDomain() }
                 notificationHelper.notifyNewEvents(newEvents)
             }
 
-            // 3. Planifie les rappels pour les événements futurs
             scheduleReminders()
-
             Result.success()
         } catch (e: Exception) {
-            // Retry avec backoff exponentiel (max 3 tentatives)
             if (runAttemptCount < 3) Result.retry() else Result.failure()
         }
     }
 
     private suspend fun scheduleReminders() {
+        val prefs = prefsRepository.prefsFlow.first()
+        val reminderHours = prefs.reminderHoursBefore.toLong().coerceAtLeast(1L)
         val now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         val upcoming = eventDao.upcomingWithoutReminder(now)
 
         upcoming.forEach { entity ->
             val eventTime = LocalDateTime.parse(entity.date, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-            val reminderTime = eventTime.minusHours(2)
+            val reminderTime = eventTime.minusHours(reminderHours)
             val delayMs = reminderTime
                 .atZone(ZoneId.systemDefault())
                 .toInstant()
@@ -82,28 +81,31 @@ class SyncWorker @AssistedInject constructor(
 
     companion object {
         const val KEY_EVENT_ID = "event_id"
-        const val WORK_NAME = "bff_sync_periodic"
+        const val WORK_NAME    = "bff_sync_periodic"
 
-        fun schedule(context: Context) {
+        /** Replanifie avec la durée stockée dans les préférences */
+        fun schedule(context: Context, intervalHours: Long = 6L) {
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
 
-            val request = PeriodicWorkRequestBuilder<SyncWorker>(6, TimeUnit.HOURS)
+            val request = PeriodicWorkRequestBuilder<SyncWorker>(
+                intervalHours.coerceIn(1L, 24L), TimeUnit.HOURS
+            )
                 .setConstraints(constraints)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
                 .build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.UPDATE,   // UPDATE pour prendre la nouvelle durée
                 request
             )
         }
     }
 }
 
-// ─── ReminderWorker : envoie la notif de rappel ──────────────────────────────
+// ─── ReminderWorker ───────────────────────────────────────────────────────────
 
 @HiltWorker
 class ReminderWorker @AssistedInject constructor(
@@ -114,17 +116,14 @@ class ReminderWorker @AssistedInject constructor(
 ) : CoroutineWorker(ctx, params) {
 
     override suspend fun doWork(): Result {
-        val id = inputData.getString(SyncWorker.KEY_EVENT_ID) ?: return Result.failure()
+        val id     = inputData.getString(SyncWorker.KEY_EVENT_ID) ?: return Result.failure()
         val entity = eventDao.findById(id) ?: return Result.failure()
-        
-        // CORRECTION : Appel en tant que fonction d'extension
-        notificationHelper.notifyReminder(entity.toDomain()) 
-        
+        notificationHelper.notifyReminder(entity.toDomain())
         return Result.success()
     }
 }
 
-// ─── BootReceiver : relance le WorkManager après reboot ──────────────────────
+// ─── BootReceiver ─────────────────────────────────────────────────────────────
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {

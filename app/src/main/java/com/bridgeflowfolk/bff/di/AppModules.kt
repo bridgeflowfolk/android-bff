@@ -3,10 +3,12 @@ package com.bridgeflowfolk.bff.di
 import android.content.Context
 import androidx.room.Room
 import com.bridgeflowfolk.bff.data.EventRepositoryImpl
+import com.bridgeflowfolk.bff.data.UserPreferencesRepositoryImpl
 import com.bridgeflowfolk.bff.data.local.BffDatabase
 import com.bridgeflowfolk.bff.data.local.EventDao
 import com.bridgeflowfolk.bff.data.remote.BffApiService
 import com.bridgeflowfolk.bff.domain.EventRepository
+import com.bridgeflowfolk.bff.domain.UserPreferencesRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -67,4 +69,7 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindEventRepository(impl: EventRepositoryImpl): EventRepository
+
+    @Binds @Singleton
+    abstract fun bindUserPreferencesRepository(impl: UserPreferencesRepositoryImpl): UserPreferencesRepository
 }
