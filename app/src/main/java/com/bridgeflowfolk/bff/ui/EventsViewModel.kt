@@ -34,42 +34,50 @@ class EventsViewModel @Inject constructor(
     private val _error            = MutableStateFlow<String?>(null)
     private val _hidePassedEvents = MutableStateFlow(false)
 
-    // Ticker toutes les minutes : force le recalcul du filtre "passés" sans refresh réseau
-    private val _minuteTicker: Flow<Unit> = flow {
-        while (true) {
-            emit(Unit)
-            delay(60_000L)
+    // Ticker toutes les 60s pour rafraîchir le filtre "passés" sans appel réseau.
+    // On le combine via zip dans un Flow intermédiaire pour rester sous l'arité 5 de combine().
+    private val _rawEvents: Flow<List<Event>> = _searchQuery
+        .debounce(300)
+        .flatMapLatest { q ->
+            if (q.isBlank()) repository.observeEvents()
+            else repository.searchEvents(q)
         }
-    }.shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000))
 
-    val uiState: StateFlow<EventsUiState> = combine(
-        _searchQuery
-            .debounce(300)
-            .flatMapLatest { q ->
-                if (q.isBlank()) repository.observeEvents()
-                else repository.searchEvents(q)
-            },
-        _isLoading,
-        _error,
-        _searchQuery,
+    private val _minuteTick: Flow<Long> = flow {
+        var tick = 0L
+        while (true) { emit(tick++); delay(60_000L) }
+    }.shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
+
+    // Events filtrés en temps réel : on combine la liste brute + le tick + le flag hidePassedEvents
+    private val _filteredEvents: Flow<List<Event>> = combine(
+        _rawEvents,
         _hidePassedEvents,
-        _minuteTicker   // déclencheur temporel
-    ) { events, loading, error, query, hideP, _ ->
-        val filtered = if (hideP) {
+        _minuteTick
+    ) { events, hideP, _ ->
+        if (hideP) {
             val now = LocalDateTime.now()
             events.filter { it.dateTime.isAfter(now) }
         } else events
+    }
+
+    val uiState: StateFlow<EventsUiState> = combine(
+        _filteredEvents,
+        _isLoading,
+        _error,
+        _searchQuery,
+        _hidePassedEvents
+    ) { filtered, loading, error, query, hideP ->
         EventsUiState(
-            events = filtered,
-            isLoading = loading,
-            error = error,
-            searchQuery = query,
+            events           = filtered,
+            isLoading        = loading,
+            error            = error,
+            searchQuery      = query,
             hidePassedEvents = hideP
         )
     }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = EventsUiState(isLoading = true)
+        scope          = viewModelScope,
+        started        = SharingStarted.WhileSubscribed(5_000),
+        initialValue   = EventsUiState(isLoading = true)
     )
 
     fun onSearchQueryChange(q: String) { _searchQuery.value = q }
@@ -77,12 +85,12 @@ class EventsViewModel @Inject constructor(
     fun onToggleHidePassedEvents(hide: Boolean) { _hidePassedEvents.value = hide }
 
     /**
-     * Suspend jusqu'à la fin du sync réseau.
-     * PullToRefreshBox peut thus attendre la vraie fin avant de masquer le spinner.
+     * Suspend jusqu'à la fin réelle du sync réseau.
+     * PullToRefreshBox attend cette fonction avant de masquer le spinner.
      */
     suspend fun refreshSuspending() {
         _isLoading.value = true
-        _error.value = null
+        _error.value     = null
         try {
             repository.syncFromNetwork()
         } catch (e: Exception) {
@@ -92,7 +100,7 @@ class EventsViewModel @Inject constructor(
         }
     }
 
-    /** Version non-suspending conservée pour l'init */
+    /** Version fire-and-forget pour l'init du ViewModel. */
     fun refresh() {
         viewModelScope.launch { refreshSuspending() }
     }
@@ -103,8 +111,8 @@ class EventsViewModel @Inject constructor(
 // ─── ViewModel préférences notifications ─────────────────────────────────────
 
 data class NotifPrefsUiState(
-    val syncIntervalHours: Float = 6f,
-    val reminderHoursBefore: Float = 2f,
+    val syncIntervalHours: Float    = 6f,
+    val reminderHoursBefore: Float  = 2f,
     val notificationsEnabled: Boolean = true
 )
 
@@ -116,8 +124,8 @@ class NotifPrefsViewModel @Inject constructor(
     val uiState: StateFlow<NotifPrefsUiState> = prefsRepository.prefsFlow
         .map { NotifPrefsUiState(it.syncIntervalHours, it.reminderHoursBefore, it.notificationsEnabled) }
         .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            scope        = viewModelScope,
+            started      = SharingStarted.WhileSubscribed(5_000),
             initialValue = NotifPrefsUiState()
         )
 
