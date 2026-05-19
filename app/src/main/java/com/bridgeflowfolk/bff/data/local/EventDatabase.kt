@@ -33,21 +33,24 @@ interface EventDao {
     @Query("SELECT id FROM events")
     suspend fun allIds(): List<String>
 
-    // REPLACE garantit que les mises à jour de contenu (lieu, description…) sont appliquées,
-    // mais remet reminderScheduled à 0 → les rappels seront recalculés au prochain sync.
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(events: List<EventEntity>): List<Long>
 
     @Query("SELECT * FROM events WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): EventEntity?
 
+    // Tous les événements à venir — utilisé par scheduleReminders pour vérifier
+    // l'état WorkManager réel plutôt que de se fier uniquement au flag DB.
+    @Query("SELECT * FROM events WHERE date > :now ORDER BY date ASC")
+    suspend fun upcomingAll(now: String): List<EventEntity>
+
+    // Conservé pour compatibilité
     @Query("SELECT * FROM events WHERE date > :now AND reminderScheduled = 0 ORDER BY date ASC")
     suspend fun upcomingWithoutReminder(now: String): List<EventEntity>
 
     @Query("UPDATE events SET reminderScheduled = 1 WHERE id = :id")
     suspend fun markReminderScheduled(id: String)
 
-    // Préserve le flag reminderScheduled lors d'un upsert
     @Query("UPDATE events SET reminderScheduled = :scheduled WHERE id = :id")
     suspend fun setReminderScheduled(id: String, scheduled: Boolean)
 }

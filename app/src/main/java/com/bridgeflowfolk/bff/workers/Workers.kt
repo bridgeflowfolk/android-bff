@@ -36,7 +36,6 @@ class SyncWorker @AssistedInject constructor(
 
             val newIds = repository.syncFromNetwork()
 
-            // Respecter le flag global d'activation des notifications
             if (prefs.notificationsEnabled && newIds.isNotEmpty()) {
                 val newEvents = newIds.mapNotNull { eventDao.findById(it) }.map { it.toDomain() }
                 notificationHelper.notifyNewEvents(newEvents)
@@ -53,10 +52,31 @@ class SyncWorker @AssistedInject constructor(
     }
 
     private suspend fun scheduleReminders(reminderHours: Long) {
-        val now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-        val upcoming = eventDao.upcomingWithoutReminder(now)
+        val workManager = WorkManager.getInstance(applicationContext)
+        val now = LocalDateTime.now()
+        val nowStr = now.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
 
-        upcoming.forEach { entity ->
+        // Tous les événements à venir, qu'ils soient déjà marqués ou non en base.
+        // On vérifie l'existence réelle du job dans WorkManager plutôt que de se fier
+        // uniquement au flag DB (qui peut être désynchronisé après reboot / clear).
+        val allUpcoming = eventDao.upcomingAll(nowStr)
+
+        allUpcoming.forEach { entity ->
+            val uniqueName = "reminder_${entity.id}"
+
+            // Vérifier si un job est déjà enqueué et en attente dans WorkManager
+            val existingWork = workManager.getWorkInfosForUniqueWork(uniqueName).get()
+            val alreadyPending = existingWork.any { info ->
+                info.state == WorkInfo.State.ENQUEUED || info.state == WorkInfo.State.RUNNING
+            }
+
+            if (alreadyPending) {
+                // Job vivant dans WorkManager → s'assurer que le flag DB est cohérent
+                if (!entity.reminderScheduled) eventDao.markReminderScheduled(entity.id)
+                return@forEach
+            }
+
+            // Ici : job absent ou terminé → (re)planifier
             val eventTime = LocalDateTime.parse(entity.date, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
             val reminderTime = eventTime.minusHours(reminderHours)
             val delayMs = reminderTime
@@ -68,21 +88,26 @@ class SyncWorker @AssistedInject constructor(
                 val reminderWork = OneTimeWorkRequestBuilder<ReminderWorker>()
                     .setInputData(
                         workDataOf(
-                            KEY_EVENT_ID    to entity.id,
-                            KEY_HOURS_BEFORE to reminderHours   // transmis au worker
+                            KEY_EVENT_ID     to entity.id,
+                            KEY_HOURS_BEFORE to reminderHours
                         )
                     )
                     .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
-                    .addTag("reminder_${entity.id}")
+                    .addTag(TAG_REMINDER)
                     .build()
 
-                WorkManager.getInstance(applicationContext)
-                    .enqueueUniqueWork(
-                        "reminder_${entity.id}",
-                        ExistingWorkPolicy.REPLACE,
-                        reminderWork
-                    )
-
+                // APPEND_OR_REPLACE : si un job du même nom existe (ex. état FAILED/CANCELLED),
+                // il est remplacé ; s'il est ENQUEUED/RUNNING (cas normalement exclu ci-dessus),
+                // il est conservé. Evite les doublons sans tuer un job valide.
+                workManager.enqueueUniqueWork(
+                    uniqueName,
+                    ExistingWorkPolicy.APPEND_OR_REPLACE,
+                    reminderWork
+                )
+                eventDao.markReminderScheduled(entity.id)
+            } else {
+                // La fenêtre de rappel est passée mais l'événement est encore à venir :
+                // on marque quand même scheduled pour ne pas boucler dessus.
                 eventDao.markReminderScheduled(entity.id)
             }
         }
@@ -92,6 +117,7 @@ class SyncWorker @AssistedInject constructor(
         const val KEY_EVENT_ID     = "event_id"
         const val KEY_HOURS_BEFORE = "hours_before"
         const val WORK_NAME        = "bff_sync_periodic"
+        const val TAG_REMINDER     = "bff_reminder"
 
         fun schedule(context: Context, intervalHours: Long = 6L) {
             val constraints = Constraints.Builder()
@@ -126,13 +152,12 @@ class ReminderWorker @AssistedInject constructor(
 ) : CoroutineWorker(ctx, params) {
 
     override suspend fun doWork(): Result {
-        // Vérifier le flag au moment de l'exécution (l'utilisateur a pu désactiver entre-temps)
         val prefs = prefsRepository.prefsFlow.first()
         if (!prefs.notificationsEnabled) return Result.success()
 
-        val id     = inputData.getString(SyncWorker.KEY_EVENT_ID)     ?: return Result.failure()
+        val id     = inputData.getString(SyncWorker.KEY_EVENT_ID)      ?: return Result.failure()
         val hours  = inputData.getLong(SyncWorker.KEY_HOURS_BEFORE, 2L)
-        val entity = eventDao.findById(id) ?: return Result.failure()
+        val entity = eventDao.findById(id)                              ?: return Result.failure()
         notificationHelper.notifyReminder(entity.toDomain(), hours)
         return Result.success()
     }
