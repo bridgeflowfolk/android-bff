@@ -7,16 +7,17 @@ on:
   pull_request:
     branches: [ main ]
 
-# Le projet Android est à la racine du dépôt : gradlew est bien à la racine
 defaults:
   run:
     working-directory: .
 
 jobs:
-  # ── Build debug (PR + push main) ──────────────────────────────────────────
+  # ── Build debug (PR + push main) ────────────────────────────────────────────
   build-debug:
     name: Build Debug APK
     runs-on: ubuntu-latest
+    # Ne tourne pas sur les tags : le job release s'en charge
+    if: "!startsWith(github.ref, 'refs/tags/v')"
 
     steps:
       - uses: actions/checkout@v4
@@ -41,12 +42,15 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 14
 
-  # ── Build release signé (tag v*) ──────────────────────────────────────────
+  # ── Build release signé (tag v*) ────────────────────────────────────────────
   build-release:
     name: Build & Sign Release APK
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build-debug
+
+    # Permissions explicites : obligatoire pour créer/modifier une release
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -61,10 +65,8 @@ jobs:
       - name: Grant Gradle execute permission
         run: chmod +x gradlew
 
-      # Décode le keystore stocké en base64 dans les secrets GitHub
       - name: Decode keystore
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/keystore.jks
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/keystore.jks
 
       - name: Build release APK
         env:
@@ -74,23 +76,21 @@ jobs:
           KEY_PASSWORD:      ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease --no-daemon
 
-      - name: Upload release APK
+      - name: Upload release APK (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: bff-release-${{ github.ref_name }}
           path: app/build/outputs/apk/release/*.apk
           retention-days: 90
 
-      # Nettoyage du keystore (runner éphémère mais bonne pratique)
       - name: Clean up keystore
         if: always()
         run: rm -f app/keystore.jks
 
-      # Publication automatique sur GitHub Releases
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/release/*.apk
           generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Pas de env: GITHUB_TOKEN nécessaire : softprops/action-gh-release
+        # utilise automatiquement le token du contexte avec les permissions ci-dessus
