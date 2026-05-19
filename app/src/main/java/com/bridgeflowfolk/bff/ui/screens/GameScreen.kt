@@ -1,7 +1,5 @@
 package com.bridgeflowfolk.bff.ui.screens
 
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -19,9 +17,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.*
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -64,7 +61,7 @@ data class PlacedWord(val word: String, val cells: List<Pair<Int,Int>>)
 data class GameState(
     val grid: List<List<Char>>,
     val placed: List<PlacedWord>,
-    val wordStatus: Map<String, Boolean>,   // mot → trouvé?
+    val wordStatus: Map<String, Boolean>,
     val secretWord: String,
     val foundCount: Int = 0,
     val score: Int = 0,
@@ -126,20 +123,38 @@ private fun buildGame(): GameState {
     )
 }
 
-// ── Ligne droite entre deux cellules ─────────────────────────────────────────
+// ── Ligne droite intelligente avec projection d'axe ───────────────────────────
 
 private fun lineCells(r0: Int, c0: Int, r1: Int, c1: Int): List<Pair<Int,Int>> {
-    val dr = r1 - r0; val dc = c1 - c0
-    val len = max(abs(dr), abs(dc))
-    if (len == 0) return listOf(r0 to c0)
+    val dr = r1 - r0
+    val dc = c1 - c0
+    if (dr == 0 && dc == 0) return listOf(r0 to c0)
+
+    var steps = max(abs(dr), abs(dc))
     val sr = if (dr == 0) 0 else dr / abs(dr)
     val sc = if (dc == 0) 0 else dc / abs(dc)
-    // force axe dominant si non-diagonal
-    return if (abs(dr) != abs(dc) && dr != 0 && dc != 0) {
-        if (abs(dr) > abs(dc)) (0..abs(dr)).map { r0 + sr * it to c0 }
-        else (0..abs(dc)).map { r0 to c0 + sc * it }
+
+    val finalSr: Int
+    val finalSc: Int
+
+    // Force l'alignement sur l'axe le plus fort (évite les zigzag involontaires au doigt)
+    if (dr == 0 || dc == 0 || abs(dr) == abs(dc)) {
+        finalSr = sr
+        finalSc = sc
     } else {
-        (0..len).map { r0 + sr * it to c0 + sc * it }
+        if (abs(dr) > abs(dc)) {
+            finalSr = sr
+            finalSc = 0
+            steps = abs(dr)
+        } else {
+            finalSr = 0
+            finalSc = sc
+            steps = abs(dc)
+        }
+    }
+
+    return (0..steps).map { i ->
+        (r0 + finalSr * i).coerceIn(0, GRID_SIZE - 1) to (c0 + finalSc * i).coerceIn(0, GRID_SIZE - 1)
     }
 }
 
@@ -155,8 +170,8 @@ fun GameScreen() {
     var showRules by remember { mutableStateOf(false) }
 
     // Timer
-    LaunchedEffect(state.won, state.elapsedSec) {
-        if (!state.won) {
+    LaunchedEffect(state.won) {
+        while (!state.won) {
             delay(1000)
             state = state.copy(elapsedSec = state.elapsedSec + 1)
         }
@@ -165,8 +180,7 @@ fun GameScreen() {
     // Victoire auto-detect
     LaunchedEffect(state.wordStatus) {
         if (state.wordStatus.isNotEmpty() && state.wordStatus.values.all { it } && !state.won) {
-            delay(500)
-            // Révéler les cellules du mot secret
+            delay(400)
             val sp = state.placed.find { it.word == state.secretWord }
             if (sp != null) foundCells = foundCells + sp.cells.toSet()
             state = state.copy(won = true)
@@ -181,29 +195,25 @@ fun GameScreen() {
 
     fun onSelectionEnd(cells: List<Pair<Int,Int>>) {
         if (cells.size < 2) return
-        val word    = cells.joinToString("") { (r, c) -> state.grid[r][c].toString() }
+        
+        // Reconstruction de la chaîne lue
+        val word = cells.joinToString("") { (r, c) -> state.grid[r][c].toString() }
         val wordRev = word.reversed()
 
-        val match = state.placed.firstOrNull { p ->
-            (p.word == word || p.word == wordRev) &&
-            p.cells.sortedWith(compareBy({ it.first }, { it.second })) ==
-            cells.sortedWith(compareBy({ it.first }, { it.second }))
+        // Validation par dictionnaire (beaucoup plus robuste et tolérant)
+        val matchingWord = when {
+            state.wordStatus[word] == false -> word
+            state.wordStatus[wordRev] == false -> wordRev
+            else -> null
         } ?: return
 
-        val w = match.word
-        if (!state.wordStatus.containsKey(w) || state.wordStatus[w] == true) return
-
-        val bonus  = max(10, 50 - state.elapsedSec / 3)
-        foundCells = foundCells + match.cells.toSet()
+        val bonus = max(10, 50 - state.elapsedSec / 3)
+        foundCells = foundCells + cells.toSet()
         state = state.copy(
-            wordStatus = state.wordStatus + (w to true),
+            wordStatus = state.wordStatus + (matchingWord to true),
             foundCount = state.foundCount + 1,
             score      = state.score + bonus
         )
-        // Révélation progressive du mot secret
-        val total   = state.wordStatus.size
-        val found   = state.wordStatus.values.count { it } + 1  // +1 déjà compté
-        // (géré via revealCount dans le composable)
     }
 
     Column(
@@ -213,7 +223,6 @@ fun GameScreen() {
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // ── Score bar ────────────────────────────────────────────────────
         ScoreBar(
             found      = state.foundCount,
             total      = state.wordStatus.size,
@@ -223,9 +232,8 @@ fun GameScreen() {
             onRules    = { showRules = true }
         )
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(16.dp))
 
-        // ── Grille ───────────────────────────────────────────────────────
         WordGrid(
             grid       = state.grid,
             selection  = selection,
@@ -237,9 +245,8 @@ fun GameScreen() {
             }
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
 
-        // ── Mot secret ───────────────────────────────────────────────────
         val revealCount = if (state.wordStatus.isEmpty()) 0 else
             (state.foundCount.toFloat() / state.wordStatus.size * state.secretWord.length).toInt()
                 .coerceIn(0, state.secretWord.length)
@@ -249,15 +256,13 @@ fun GameScreen() {
             revealCount = if (state.won) state.secretWord.length else revealCount
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
 
-        // ── Liste des mots ────────────────────────────────────────────────
         WordChips(wordStatus = state.wordStatus)
 
         Spacer(Modifier.height(24.dp))
     }
 
-    // ── Overlay victoire ──────────────────────────────────────────────────
     if (state.won) {
         VictoryDialog(
             secretWord  = state.secretWord,
@@ -267,7 +272,6 @@ fun GameScreen() {
         )
     }
 
-    // ── Règles ────────────────────────────────────────────────────────────
     if (showRules) {
         RulesDialog(onDismiss = { showRules = false })
     }
@@ -317,7 +321,7 @@ private fun StatChip(label: String, value: String, valueColor: Color = Dark) {
     }
 }
 
-// ── Grille ───────────────────────────────────────────────────────────────────
+// ── Grille de Jeu Revisitée ──────────────────────────────────────────────────
 
 @Composable
 private fun WordGrid(
@@ -327,15 +331,18 @@ private fun WordGrid(
     onSelChange: (List<Pair<Int,Int>>) -> Unit,
     onSelEnd: (List<Pair<Int,Int>>) -> Unit
 ) {
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-        val cellPx = ((maxWidth - 12.dp) / GRID_SIZE).coerceAtMost(36.dp)
-        
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        val cellPx = ((maxWidth) / GRID_SIZE).coerceAtMost(38.dp)
         val density = LocalDensity.current
         val cellPxValue = with(density) { cellPx.toPx() }
 
         var startCell by remember { mutableStateOf<Pair<Int,Int>?>(null) }
 
-        // CORRECTION : Suppression du "?" pour rendre le retour non-nullable
         fun cellAt(offset: Offset): Pair<Int,Int> {
             val col = (offset.x / cellPxValue).toInt().coerceIn(0, GRID_SIZE - 1)
             val row = (offset.y / cellPxValue).toInt().coerceIn(0, GRID_SIZE - 1)
@@ -344,6 +351,7 @@ private fun WordGrid(
 
         Column(
             modifier = Modifier
+                .wrapContentSize()
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = { offset ->
@@ -352,6 +360,7 @@ private fun WordGrid(
                             onSelChange(listOf(c))
                         },
                         onDrag = { change, _ ->
+                            change.consume() // CRUCIAL : Bloque le scroll parent pendant le tracé
                             val c = cellAt(change.position)
                             val s = startCell ?: return@detectDragGestures
                             onSelChange(lineCells(s.first, s.second, c.first, c.second))
@@ -381,7 +390,7 @@ private fun WordGrid(
                                 isSelected -> Gold
                                 else       -> Cream
                             },
-                            animationSpec = tween(120), label = "cell_bg"
+                            animationSpec = tween(100), label = "cell_bg"
                         )
                         val textColor = when {
                             isFound || isSelected -> Color.White
@@ -396,17 +405,16 @@ private fun WordGrid(
                         Box(
                             modifier = Modifier
                                 .size(cellPx)
-                                // CORRECTION : Maintenant reconnu grâce à l'import
                                 .graphicsLayer { scaleX = scale; scaleY = scale }
-                                .clip(RoundedCornerShape(5.dp))
+                                .clip(RoundedCornerShape(6.dp))
                                 .background(bgColor)
-                                .border(1.dp, if (isFound || isSelected) Color.Transparent else GoldL,
-                                    RoundedCornerShape(5.dp)),
+                                .border(0.5.dp, if (isFound || isSelected) Color.Transparent else GoldL.copy(alpha = 0.7f),
+                                    RoundedCornerShape(6.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text      = grid[r][c].toString(),
-                                fontSize  = (cellPx.value * 0.40f).sp,
+                                fontSize  = (cellPx.value * 0.45f).sp,
                                 fontWeight = FontWeight.Bold,
                                 color     = textColor
                             )
@@ -426,7 +434,7 @@ private fun SecretWordRow(word: String, revealCount: Int) {
         color = Dark,
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier
-            .padding(horizontal = 12.dp)
+            .padding(horizontal = 16.dp)
             .fillMaxWidth()
     ) {
         Column(
@@ -469,16 +477,16 @@ private fun SecretWordRow(word: String, revealCount: Int) {
 
 // ── Chips de mots ─────────────────────────────────────────────────────────────
 
-@OptIn(ExperimentalLayoutApi::class) // <-- CORRECTION : Permet d'utiliser FlowRow
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WordChips(wordStatus: Map<String, Boolean>) {
-    Column(modifier = Modifier.padding(horizontal = 12.dp).fillMaxWidth()) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
         Text(
             "Mots à trouver",
-            fontSize = 9.sp, letterSpacing = 1.5.sp, color = Brown,
-            fontWeight = FontWeight.Medium,
+            fontSize = 10.sp, letterSpacing = 1.5.sp, color = Brown,
+            fontWeight = FontWeight.Bold,
             modifier = Modifier
-                .padding(bottom = 8.dp)
+                .padding(bottom = 10.dp)
                 .fillMaxWidth()
                 .drawBehind {
                     drawLine(color = GoldL, start = Offset(0f, size.height + 4),
@@ -486,13 +494,13 @@ private fun WordChips(wordStatus: Map<String, Boolean>) {
                 }
         )
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement   = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement   = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             wordStatus.forEach { (word, found) ->
                 val bgAnim by animateColorAsState(
-                    if (found) Sage else Cream, tween(300), label = "chip_$word"
+                    if (found) Sage else Cream, tween(250), label = "chip_$word"
                 )
                 val textColor = if (found) Color.White else Brown
                 Surface(
@@ -503,16 +511,17 @@ private fun WordChips(wordStatus: Map<String, Boolean>) {
                 ) {
                     Text(
                         text = word,
-                        fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp, color = textColor,
+                        fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp, color = textColor,
                         textDecoration = if (found) TextDecoration.LineThrough else null,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                     )
                 }
             }
         }
     }
 }
+
 // ── Victoire ──────────────────────────────────────────────────────────────────
 
 @Composable
