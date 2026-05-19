@@ -79,7 +79,7 @@ class SyncWorker @AssistedInject constructor(
                 WorkManager.getInstance(applicationContext)
                     .enqueueUniqueWork(
                         "reminder_${entity.id}",
-                        ExistingWorkPolicy.KEEP,
+                        ExistingWorkPolicy.REPLACE,
                         reminderWork
                     )
 

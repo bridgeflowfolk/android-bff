@@ -1,11 +1,14 @@
 package com.bridgeflowfolk.bff.data
 
+import android.content.Context
+import androidx.work.WorkManager
 import com.bridgeflowfolk.bff.data.local.EventDao
 import com.bridgeflowfolk.bff.data.local.EventEntity
 import com.bridgeflowfolk.bff.data.remote.BffApiService
 import com.bridgeflowfolk.bff.data.remote.EventDto
 import com.bridgeflowfolk.bff.domain.Event
 import com.bridgeflowfolk.bff.domain.EventRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.LocalDateTime
@@ -16,7 +19,8 @@ import javax.inject.Singleton
 @Singleton
 class EventRepositoryImpl @Inject constructor(
     private val dao: EventDao,
-    private val api: BffApiService
+    private val api: BffApiService,
+    @ApplicationContext private val context: Context
 ) : EventRepository {
 
     override fun observeEvents(): Flow<List<Event>> =
@@ -29,12 +33,19 @@ class EventRepositoryImpl @Inject constructor(
         val remote = api.getEvents()
         val existingIds = dao.allIds().toSet()
 
-        // Préserver reminderScheduled pour les événements déjà connus
         val entities = remote.map { dto ->
             val existing = dao.findById(dto.id)
+            // Remettre reminderScheduled à false si la date a changé ou si c'est un nouvel événement,
+            // afin que SyncWorker replanifie un rappel sur la nouvelle date.
+            val dateChanged = existing != null && existing.date != dto.date
+            if (dateChanged) {
+                // Annuler le reminder WorkManager planifié sur l'ancienne date
+                WorkManager.getInstance(context).cancelUniqueWork("reminder_${dto.id}")
+            }
             dto.toEntity().copy(
-                notified          = existing?.notified          ?: false,
-                reminderScheduled = existing?.reminderScheduled ?: false
+                notified          = existing?.notified ?: false,
+                reminderScheduled = if (existing == null || dateChanged) false
+                                    else existing.reminderScheduled
             )
         }
         dao.upsertAll(entities)
