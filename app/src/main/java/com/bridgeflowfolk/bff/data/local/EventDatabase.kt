@@ -11,7 +11,7 @@ data class EventEntity(
     val location: String,
     val description: String,
     val imageUrl: String?,
-    val eventUrl: String? = null,                  // URL dédiée (nullable)
+    val eventUrl: String? = null,
     val notified: Boolean = false,
     val reminderScheduled: Boolean = false
 )
@@ -33,11 +33,10 @@ interface EventDao {
     @Query("SELECT id FROM events")
     suspend fun allIds(): List<String>
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertNew(events: List<EventEntity>): List<Long>
-
-    @Update
-    suspend fun update(event: EventEntity)
+    // REPLACE garantit que les mises à jour de contenu (lieu, description…) sont appliquées,
+    // mais remet reminderScheduled à 0 → les rappels seront recalculés au prochain sync.
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(events: List<EventEntity>): List<Long>
 
     @Query("SELECT * FROM events WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): EventEntity?
@@ -47,10 +46,14 @@ interface EventDao {
 
     @Query("UPDATE events SET reminderScheduled = 1 WHERE id = :id")
     suspend fun markReminderScheduled(id: String)
+
+    // Préserve le flag reminderScheduled lors d'un upsert
+    @Query("UPDATE events SET reminderScheduled = :scheduled WHERE id = :id")
+    suspend fun setReminderScheduled(id: String, scheduled: Boolean)
 }
 
-// Version 2 : ajout du champ eventUrl
-@Database(entities = [EventEntity::class], version = 2, exportSchema = false)
+// Version 3 : migration vers REPLACE strategy (schéma inchangé)
+@Database(entities = [EventEntity::class], version = 3, exportSchema = false)
 abstract class BffDatabase : RoomDatabase() {
     abstract fun eventDao(): EventDao
 }

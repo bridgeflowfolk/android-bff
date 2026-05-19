@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -141,27 +142,34 @@ fun ContactScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
-        // Slider : intervalle de vérification
-        NotifSlider(
-            icon = Icons.Default.Schedule,
-            label = "Vérification toutes les",
-            value = prefs.syncIntervalHours,
-            onValueChange = { prefsViewModel.setSyncInterval(it) },
-            valueRange = 1f..24f,
-            unit = "h",
-            description = "Fréquence de synchronisation des nouveaux événements"
+        // Interrupteur principal notifications
+        NotificationsToggle(
+            enabled = prefs.notificationsEnabled,
+            onToggle = { prefsViewModel.setNotificationsEnabled(it) }
         )
 
-        // Slider : délai de rappel
-        NotifSlider(
-            icon = Icons.Default.Notifications,
-            label = "Rappel avant l'événement",
-            value = prefs.reminderHoursBefore,
-            onValueChange = { prefsViewModel.setReminderHoursBefore(it) },
-            valueRange = 1f..24f,
-            unit = "h",
-            description = "Vous serez notifié X heures avant le début"
-        )
+        // Sliders visibles seulement si les notifs sont activées
+        if (prefs.notificationsEnabled) {
+            NotifSlider(
+                icon = Icons.Default.Schedule,
+                label = "Vérification toutes les",
+                value = prefs.syncIntervalHours,
+                onValueChange = { prefsViewModel.setSyncInterval(it) },
+                valueRange = 1f..24f,
+                unit = "h",
+                description = "Fréquence de synchronisation des nouveaux événements"
+            )
+
+            NotifSlider(
+                icon = Icons.Default.Notifications,
+                label = "Rappel avant l'événement",
+                value = prefs.reminderHoursBefore,
+                onValueChange = { prefsViewModel.setReminderHoursBefore(it) },
+                valueRange = 1f..24f,
+                unit = "h",
+                description = "Vous serez notifié X heures avant le début"
+            )
+        }
 
         Spacer(Modifier.height(16.dp))
 
@@ -170,6 +178,61 @@ fun ContactScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+// ─── Toggle notifications ─────────────────────────────────────────────────────
+
+@Composable
+private fun NotificationsToggle(enabled: Boolean, onToggle: (Boolean) -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (enabled)
+                MaterialTheme.colorScheme.primaryContainer
+            else
+                MaterialTheme.colorScheme.surfaceVariant
+        ),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = if (enabled) Icons.Default.Notifications else Icons.Default.NotificationsOff,
+                    contentDescription = null,
+                    tint = if (enabled) MaterialTheme.colorScheme.primary
+                           else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp)
+                )
+                Column {
+                    Text(
+                        text = "Notifications",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (enabled) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = if (enabled) "Activées" else "Désactivées",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (enabled) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.outlineVariant
+                    )
+                }
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle
+            )
+        }
     }
 }
 
