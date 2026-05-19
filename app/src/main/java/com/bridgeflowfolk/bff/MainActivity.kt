@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Star // <-- Nouvel import pour l'icône du jeu
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -24,12 +25,14 @@ import androidx.navigation.compose.rememberNavController
 import com.bridgeflowfolk.bff.ui.screens.AboutScreen
 import com.bridgeflowfolk.bff.ui.screens.ContactScreen
 import com.bridgeflowfolk.bff.ui.screens.EventsScreen
+import com.bridgeflowfolk.bff.ui.screens.GameScreen // <-- Import de ton nouvel écran
 import com.bridgeflowfolk.bff.ui.theme.BffTheme
 import com.bridgeflowfolk.bff.workers.SyncWorker
 import dagger.hilt.android.AndroidEntryPoint
 
 sealed class Screen(val route: String, val label: String) {
     object Events  : Screen("events",  "Événements")
+    object Game    : Screen("game",    "Jeu") // <-- 1. Ajout de la route du jeu
     object About   : Screen("about",   "À propos")
     object Contact : Screen("contact", "Contact")
 }
@@ -49,7 +52,9 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val navBackStack  by navController.currentBackStackEntryAsState()
                 val currentDest   = navBackStack?.destination
-                val bottomItems   = listOf(Screen.Events, Screen.About, Screen.Contact)
+                
+                // 2. Ajout de Screen.Game dans la liste des onglets du bas
+                val bottomItems   = listOf(Screen.Events, Screen.Game, Screen.About, Screen.Contact)
 
                 Scaffold(
                     topBar = {
@@ -85,6 +90,7 @@ class MainActivity : ComponentActivity() {
                                     icon = {
                                         when (screen) {
                                             Screen.Events  -> Icon(Icons.Default.CalendarMonth, screen.label)
+                                            Screen.Game    -> Icon(Icons.Default.Star, screen.label) // <-- 3. Icône du jeu
                                             Screen.About   -> Icon(Icons.Default.Info, screen.label)
                                             Screen.Contact -> Icon(Icons.Default.Phone, screen.label)
                                         }
@@ -101,6 +107,7 @@ class MainActivity : ComponentActivity() {
                         modifier         = Modifier.padding(innerPadding)
                     ) {
                         composable(Screen.Events.route)  { EventsScreen() }
+                        composable(Screen.Game.route)    { GameScreen() } // <-- 4. Déclaration du composable
                         composable(Screen.About.route)   { AboutScreen() }
                         composable(Screen.Contact.route) { ContactScreen() }
                     }
@@ -115,7 +122,7 @@ private fun RequestNotificationPermission() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         val launcher = rememberLauncherForActivityResult(
             ActivityResultContracts.RequestPermission()
-        ) { /* résultat ignoré : l'app fonctionne sans notifs */ }
+        ) { /* résultat ignoré */ }
         LaunchedEffect(Unit) { launcher.launch(Manifest.permission.POST_NOTIFICATIONS) }
     }
 }
