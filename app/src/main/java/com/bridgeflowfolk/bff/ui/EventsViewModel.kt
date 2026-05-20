@@ -119,6 +119,7 @@ data class NotifPrefsUiState(
 @HiltViewModel
 class NotifPrefsViewModel @Inject constructor(
     private val prefsRepository: UserPreferencesRepository
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
 ) : ViewModel() {
 
     val uiState: StateFlow<NotifPrefsUiState> = prefsRepository.prefsFlow
@@ -130,11 +131,21 @@ class NotifPrefsViewModel @Inject constructor(
         )
 
     fun setSyncInterval(hours: Float) {
-        viewModelScope.launch { prefsRepository.setSyncInterval(hours) }
+        viewModelScope.launch { 
+            prefsRepository.setSyncInterval(hours)            
+            com.bridgeflowfolk.bff.workers.SyncWorker.schedule(context)
+        }
     }
 
     fun setReminderHoursBefore(hours: Float) {
-        viewModelScope.launch { prefsRepository.setReminderHoursBefore(hours) }
+        viewModelScope.launch { 
+            prefsRepository.setReminderHoursBefore(hours)           
+            com.bridgeflowfolk.bff.workers.SyncWorker.rescheduleAllReminders(
+                context = context,
+                eventDao = eventDao,
+                hoursBefore = hours.toLong()
+            )
+        }
     }
 
     fun setNotificationsEnabled(enabled: Boolean) {
