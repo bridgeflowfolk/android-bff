@@ -1,6 +1,8 @@
 package com.bridgeflowfolk.bff.ui.screens
 
+import android.content.Context
 import android.content.Intent
+import android.util.Log
 import android.net.Uri
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -32,6 +34,13 @@ import com.bridgeflowfolk.bff.ui.NotifPrefsViewModel
 import com.bridgeflowfolk.bff.ui.theme.BffColors
 import com.bridgeflowfolk.bff.ui.components.hapticTick
 import kotlin.math.roundToInt
+
+
+// ─── Lancement d'Intent sécurisé (local) ─────────────────────────────────────
+private fun Context.startSafe(intent: Intent) {
+    try { startActivity(intent) }
+    catch (e: Exception) { Log.w("BFF", "startActivity échoué : ${e.message}") }
+}
 
 // ─── À propos (WebView) ───────────────────────────────────────────────────────
 
@@ -86,7 +95,7 @@ fun ContactScreen(prefsViewModel: NotifPrefsViewModel = hiltViewModel()) {
             containerColor = MaterialTheme.colorScheme.primary,
             onClick        = {
                 ctx.hapticTick()
-                ctx.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:0618291873")))
+                ctx.startSafe(Intent(Intent.ACTION_DIAL, Uri.parse("tel:0618291873")))
             }
         )
 
@@ -96,7 +105,7 @@ fun ContactScreen(prefsViewModel: NotifPrefsViewModel = hiltViewModel()) {
             containerColor = MaterialTheme.colorScheme.secondary,
             onClick        = {
                 ctx.hapticTick()
-                ctx.startActivity(
+                ctx.startSafe(
                     Intent(Intent.ACTION_SENDTO).apply {
                         data = Uri.parse("mailto:bridgeflow.f@gmail.com")
                     }
@@ -107,7 +116,7 @@ fun ContactScreen(prefsViewModel: NotifPrefsViewModel = hiltViewModel()) {
         Button(
             onClick = {
                 ctx.hapticTick()
-                ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/33618291873")))
+                ctx.startSafe(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/33618291873")))
             },
             colors   = ButtonDefaults.buttonColors(containerColor = BffColors.SageGreen),
             modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -121,7 +130,7 @@ fun ContactScreen(prefsViewModel: NotifPrefsViewModel = hiltViewModel()) {
         Button(
             onClick = {
                 ctx.hapticTick()
-                ctx.startActivity(
+                ctx.startSafe(
                     Intent(Intent.ACTION_VIEW,
                         Uri.parse("https://www.facebook.com/profile.php?id=61587252715739"))
                 )

@@ -237,9 +237,21 @@ private fun EventActionButton(
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
 
+// ─── Lancement d'Intent sécurisé ─────────────────────────────────────────────
+// startActivity sans guard → ActivityNotFoundException si aucune app ne gère l'Intent.
+// On encapsule systématiquement pour ne jamais crasher l'appli.
+
+private fun Context.startSafe(intent: Intent) {
+    try {
+        startActivity(intent)
+    } catch (e: Exception) {
+        android.util.Log.w("BFF", "startActivity échoué : ${e.message}")
+    }
+}
+
 private fun openUrl(context: Context, url: String) {
     val uri = if (url.startsWith("http")) Uri.parse(url) else Uri.parse("https://$url")
-    context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+    context.startSafe(Intent(Intent.ACTION_VIEW, uri))
 }
 
 private fun addToCalendar(context: Context, event: Event) {
@@ -258,7 +270,7 @@ private fun addToCalendar(context: Context, event: Event) {
         putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, startMs)
         putExtra(CalendarContract.EXTRA_EVENT_END_TIME, endMs)
     }
-    context.startActivity(intent)
+    context.startSafe(intent)
 }
 
 private fun shareEvent(context: Context, event: Event) {
@@ -279,18 +291,19 @@ private fun shareEvent(context: Context, event: Event) {
         putExtra(Intent.EXTRA_SUBJECT, event.title)
         putExtra(Intent.EXTRA_TEXT, text)
     }
-    context.startActivity(Intent.createChooser(intent, "Partager l'événement"))
+    context.startSafe(Intent.createChooser(intent, "Partager l'événement"))
 }
 
 private fun openNavigation(context: Context, event: Event) {
-    val encoded   = URLEncoder.encode(event.location, "UTF-8")
-    val wazeUri   = Uri.parse("waze://?q=$encoded&navigate=yes")
-    val mapsUri   = Uri.parse("https://maps.google.com/?q=$encoded")
-    val wazeIntent = Intent(Intent.ACTION_VIEW, wazeUri)
-    if (wazeIntent.resolveActivity(context.packageManager) != null) {
-        context.startActivity(wazeIntent)
-    } else {
-        context.startActivity(Intent(Intent.ACTION_VIEW, mapsUri))
+    val encoded  = URLEncoder.encode(event.location, "UTF-8")
+    // Waze : tentative en premier, fallback Google Maps en https
+    // On n'utilise pas resolveActivity (comportement non fiable Android 11+
+    // même avec <queries>) — on tente directement et on attrape l'exception.
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("waze://?q=$encoded&navigate=yes")))
+    } catch (e: Exception) {
+        context.startSafe(Intent(Intent.ACTION_VIEW,
+            Uri.parse("https://maps.google.com/?q=$encoded")))
     }
 }
 

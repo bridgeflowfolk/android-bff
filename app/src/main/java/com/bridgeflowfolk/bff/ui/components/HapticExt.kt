@@ -8,17 +8,22 @@ import android.os.VibratorManager
 
 /**
  * Feedback haptique léger (50 ms).
- * Confirme l'action sans être intrusif — cohérent avec les guidelines Material3.
- * Compatible Android 8+ (API 26+, minSdk du projet).
+ * Encapsulé dans try/catch : getSystemService peut retourner null ou lever
+ * une exception sur certains contextes Compose / appareils (Samsung, Xiaomi…).
+ * Le feedback haptique est un bonus — il ne doit jamais crasher l'app.
  */
 fun Context.hapticTick() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val vm = getSystemService(VibratorManager::class.java)
-        vm?.defaultVibrator?.vibrate(
-            VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE)
-        )
-    } else {
-        @Suppress("DEPRECATION")
-        getSystemService(Vibrator::class.java)?.vibrate(50)
+    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vm = getSystemService(VibratorManager::class.java)
+            vm?.defaultVibrator?.vibrate(
+                VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE)
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Vibrator::class.java)?.vibrate(50)
+        }
+    } catch (e: Exception) {
+        // Silencieux : haptique non critique, on ne crashe jamais pour ça
     }
 }
