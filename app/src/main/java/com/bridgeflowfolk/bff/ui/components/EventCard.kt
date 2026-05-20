@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.CalendarContract
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -15,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
@@ -32,7 +34,11 @@ private val frDateFormatter = DateTimeFormatter
     .ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
     .withLocale(Locale.FRANCE)
 
-// ─── Carte événement avec actions ─────────────────────────────────────────────
+// ─── Feedback haptique léger ──────────────────────────────────────────────────
+// Tick court (50ms) : confirme l'action sans être intrusif.
+
+
+// ─── Carte événement ──────────────────────────────────────────────────────────
 
 @Composable
 fun EventCard(event: Event, modifier: Modifier = Modifier) {
@@ -42,11 +48,12 @@ fun EventCard(event: Event, modifier: Modifier = Modifier) {
     val hasUrl = !event.eventUrl.isNullOrBlank()
 
     Card(
-        modifier = modifier
+        modifier  = modifier
             .fillMaxWidth()
-            .animateContentSize(),
+            // animateContentSize avec tween 280ms — correspond au timing des transitions d'onglets
+            .animateContentSize(animationSpec = tween(280)),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isPast) 1.dp else 2.dp),
-        colors = CardDefaults.cardColors(
+        colors    = CardDefaults.cardColors(
             containerColor = if (isPast)
                 MaterialTheme.colorScheme.surfaceVariant
             else
@@ -58,10 +65,10 @@ fun EventCard(event: Event, modifier: Modifier = Modifier) {
             // ── Image ────────────────────────────────────────────────────────
             event.imageUrl?.let { url ->
                 AsyncImage(
-                    model = url,
+                    model              = url,
                     contentDescription = event.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
+                    contentScale       = ContentScale.Crop,
+                    modifier           = Modifier
                         .fillMaxWidth()
                         .height(180.dp)
                         .clip(MaterialTheme.shapes.medium)
@@ -73,31 +80,31 @@ fun EventCard(event: Event, modifier: Modifier = Modifier) {
                 // ── Badge "passé" ─────────────────────────────────────────────
                 if (isPast) {
                     Surface(
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                        shape = MaterialTheme.shapes.small,
+                        color    = MaterialTheme.colorScheme.outlineVariant,
+                        shape    = MaterialTheme.shapes.small,
                         modifier = Modifier.padding(bottom = 6.dp)
                     ) {
                         Text(
                             "Événement passé",
-                            style = MaterialTheme.typography.labelSmall,
+                            style    = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color    = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
-                // ── Titre (cliquable si eventUrl présent) ─────────────────────
+                // ── Titre ─────────────────────────────────────────────────────
                 if (hasUrl) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalAlignment   = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = event.title,
-                            style = MaterialTheme.typography.titleMedium.copy(
+                            text     = event.title,
+                            style    = MaterialTheme.typography.titleMedium.copy(
                                 textDecoration = TextDecoration.Underline
                             ),
-                            color = MaterialTheme.colorScheme.primary,
+                            color    = MaterialTheme.colorScheme.primary,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
@@ -105,17 +112,17 @@ fun EventCard(event: Event, modifier: Modifier = Modifier) {
                                 .clickable { openUrl(context, event.eventUrl!!) }
                         )
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                            imageVector     = Icons.AutoMirrored.Filled.OpenInNew,
                             contentDescription = "Ouvrir le site",
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            modifier        = Modifier.size(16.dp),
+                            tint            = MaterialTheme.colorScheme.primary
                         )
                     }
                 } else {
                     Text(
-                        text = event.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        text     = event.title,
+                        style    = MaterialTheme.typography.titleMedium,
+                        color    = MaterialTheme.colorScheme.onSurface,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -125,14 +132,11 @@ fun EventCard(event: Event, modifier: Modifier = Modifier) {
 
                 // ── Date ──────────────────────────────────────────────────────
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.CalendarToday, contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    Icon(Icons.Default.CalendarToday, contentDescription = null,
+                        modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = event.dateTime.format(frDateFormatter),
+                        text  = event.dateTime.format(frDateFormatter),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -142,14 +146,11 @@ fun EventCard(event: Event, modifier: Modifier = Modifier) {
 
                 // ── Lieu ──────────────────────────────────────────────────────
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.LocationOn, contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.tertiary
-                    )
+                    Icon(Icons.Default.LocationOn, contentDescription = null,
+                        modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.tertiary)
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = event.location,
+                        text  = event.location,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -159,18 +160,18 @@ fun EventCard(event: Event, modifier: Modifier = Modifier) {
                 if (event.description.isNotBlank()) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = event.description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text     = event.description,
+                        style    = MaterialTheme.typography.bodyMedium,
+                        color    = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = if (descriptionExpanded) Int.MAX_VALUE else 3,
                         overflow = if (descriptionExpanded) TextOverflow.Clip else TextOverflow.Ellipsis,
                         modifier = Modifier.clickable { descriptionExpanded = !descriptionExpanded }
                     )
                     if (!descriptionExpanded) {
                         Text(
-                            text = "Voir plus…",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
+                            text     = "Voir plus…",
+                            style    = MaterialTheme.typography.labelSmall,
+                            color    = MaterialTheme.colorScheme.primary,
                             modifier = Modifier
                                 .clickable { descriptionExpanded = true }
                                 .padding(top = 2.dp)
@@ -182,28 +183,28 @@ fun EventCard(event: Event, modifier: Modifier = Modifier) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Spacer(Modifier.height(8.dp))
 
-                // ── Boutons d'action ──────────────────────────────────────────
+                // ── Boutons d'action avec feedback haptique ───────────────────
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier              = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     EventActionButton(
-                        icon = Icons.Default.CalendarMonth,
-                        label = "Agenda",
+                        icon     = Icons.Default.CalendarMonth,
+                        label    = "Agenda",
                         modifier = Modifier.weight(1f),
-                        onClick = { addToCalendar(context, event) }
+                        onClick  = { context.hapticTick(); addToCalendar(context, event) }
                     )
                     EventActionButton(
-                        icon = Icons.Default.Share,
-                        label = "Partager",
+                        icon     = Icons.Default.Share,
+                        label    = "Partager",
                         modifier = Modifier.weight(1f),
-                        onClick = { shareEvent(context, event) }
+                        onClick  = { context.hapticTick(); shareEvent(context, event) }
                     )
                     EventActionButton(
-                        icon = Icons.Default.Navigation,
-                        label = "Itinéraire",
+                        icon     = Icons.Default.Navigation,
+                        label    = "Itinéraire",
                         modifier = Modifier.weight(1f),
-                        onClick = { openNavigation(context, event) }
+                        onClick  = { context.hapticTick(); openNavigation(context, event) }
                     )
                 }
             }
@@ -215,16 +216,18 @@ fun EventCard(event: Event, modifier: Modifier = Modifier) {
 
 @Composable
 private fun EventActionButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     label: String,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    OutlinedButton(
-        onClick = onClick,
-        modifier = modifier.height(40.dp),
-        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-        shape = MaterialTheme.shapes.small
+    // FilledTonalButton : plus de présence visuelle qu'OutlinedButton,
+    // restant sobre — couleur secondaryContainer du thème BFF (beige chaud)
+    FilledTonalButton(
+        onClick         = onClick,
+        modifier        = modifier.height(40.dp),
+        contentPadding  = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+        shape           = MaterialTheme.shapes.small
     ) {
         Icon(icon, contentDescription = label, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(4.dp))
@@ -240,13 +243,9 @@ private fun openUrl(context: Context, url: String) {
 }
 
 private fun addToCalendar(context: Context, event: Event) {
-    val startMs = event.dateTime
-        .atZone(ZoneId.systemDefault())
-        .toInstant()
-        .toEpochMilli()
-    val endMs = startMs + 2 * 60 * 60 * 1000L
-
-    val intent = Intent(Intent.ACTION_INSERT).apply {
+    val startMs = event.dateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    val endMs   = startMs + 2 * 60 * 60 * 1000L
+    val intent  = Intent(Intent.ACTION_INSERT).apply {
         data = CalendarContract.Events.CONTENT_URI
         putExtra(CalendarContract.Events.TITLE, event.title)
         putExtra(CalendarContract.Events.EVENT_LOCATION, event.location)
@@ -267,8 +266,7 @@ private fun shareEvent(context: Context, event: Event) {
         DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
             .withLocale(Locale.FRANCE)
     )
-    val url = event.eventUrl?.takeIf { it.isNotBlank() }
-        ?: "https://bridgeflowfolk.github.io"
+    val url  = event.eventUrl?.takeIf { it.isNotBlank() } ?: "https://bridgeflowfolk.github.io"
     val text = buildString {
         append("🌿 ${event.title}\n")
         append("📅 $dateStr\n")
@@ -285,10 +283,9 @@ private fun shareEvent(context: Context, event: Event) {
 }
 
 private fun openNavigation(context: Context, event: Event) {
-    val encoded = URLEncoder.encode(event.location, "UTF-8")
-    val wazeUri  = Uri.parse("waze://?q=$encoded&navigate=yes")
-    val mapsUri  = Uri.parse("https://maps.google.com/?q=$encoded")
-
+    val encoded   = URLEncoder.encode(event.location, "UTF-8")
+    val wazeUri   = Uri.parse("waze://?q=$encoded&navigate=yes")
+    val mapsUri   = Uri.parse("https://maps.google.com/?q=$encoded")
     val wazeIntent = Intent(Intent.ACTION_VIEW, wazeUri)
     if (wazeIntent.resolveActivity(context.packageManager) != null) {
         context.startActivity(wazeIntent)
@@ -302,27 +299,27 @@ private fun openNavigation(context: Context, event: Event) {
 @Composable
 fun EmptyState(modifier: Modifier = Modifier, query: String = "") {
     Column(
-        modifier = modifier.padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        modifier              = modifier.padding(32.dp),
+        horizontalAlignment   = Alignment.CenterHorizontally,
+        verticalArrangement   = Arrangement.Center
     ) {
         Icon(
             Icons.Default.SearchOff,
             contentDescription = null,
             modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.outlineVariant
+            tint     = MaterialTheme.colorScheme.outlineVariant
         )
         Spacer(Modifier.height(16.dp))
         Text(
-            text = if (query.isBlank()) "Aucun événement pour l'instant"
-                   else "Aucun résultat pour « $query »",
+            text  = if (query.isBlank()) "Aucun événement pour l'instant"
+                    else "Aucun résultat pour « $query »",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         if (query.isBlank()) {
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Tirez vers le bas pour actualiser",
+                text  = "Tirez vers le bas pour actualiser",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outlineVariant
             )

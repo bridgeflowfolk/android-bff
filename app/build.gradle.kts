@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)   // Navigation type-safe routes
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
 }
@@ -21,15 +22,15 @@ val gitVersionName: String by lazy {
 }
 
 android {
-    namespace = "com.bridgeflowfolk.bff"
+    namespace  = "com.bridgeflowfolk.bff"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.bridgeflowfolk.bff"
-        minSdk = 26       // Android 8.0 Oreo
-        targetSdk = 35
-        versionCode = gitVersionCode
-        versionName = gitVersionName
+        applicationId   = "com.bridgeflowfolk.bff"
+        minSdk          = 26       // Android 8.0 Oreo
+        targetSdk       = 35
+        versionCode     = gitVersionCode
+        versionName     = gitVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -41,8 +42,8 @@ android {
             val keyAliasName  = System.getenv("KEY_ALIAS")
             val keyPass       = System.getenv("KEY_PASSWORD")
 
-            // Ne configure la signature que si toutes les vars sont présentes
-            // → évite un crash Gradle en build local sans les secrets
+            // Ne configure la signature que si toutes les vars sont présentes.
+            // Chemin absolu attendu (ex. /tmp/keystore.jks) → pas d'ambiguïté avec file().
             if (!keystorePath.isNullOrBlank() && !keystorePass.isNullOrBlank()
                 && !keyAliasName.isNullOrBlank() && !keyPass.isNullOrBlank()) {
                 storeFile     = file(keystorePath)
@@ -56,12 +57,12 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
-            isDebuggable = true
+            isDebuggable        = true
         }
         release {
-            isMinifyEnabled    = true
-            isShrinkResources  = true
-            signingConfig      = signingConfigs.getByName("release")
+            isMinifyEnabled   = true
+            isShrinkResources = true
+            signingConfig     = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -82,6 +83,8 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    // lifecycle-runtime-compose : fournit collectAsStateWithLifecycle()
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
 
     // Compose
@@ -93,9 +96,10 @@ dependencies {
     implementation(libs.compose.material.icons)
     debugImplementation(libs.compose.ui.tooling)
 
-    // Navigation
+    // Navigation + serialization pour les routes type-safe
     implementation(libs.navigation.compose)
     implementation(libs.hilt.navigation.compose)
+    implementation(libs.kotlinx.serialization.json)
 
     // Hilt
     implementation(libs.hilt.android)
@@ -111,7 +115,7 @@ dependencies {
     implementation(libs.retrofit.gson)
     implementation(libs.okhttp.logging)
 
-    // Coil
+    // Coil — maintenu sur 2.x (Coil 3 = breaking change de package)
     implementation(libs.coil.compose)
 
     // WorkManager

@@ -33,8 +33,10 @@ interface EventDao {
     @Query("SELECT id FROM events")
     suspend fun allIds(): List<String>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertAll(events: List<EventEntity>): List<Long>
+    // Room 2.7 : @Upsert remplace @Insert(onConflict = OnConflictStrategy.REPLACE)
+    // Sémantique identique mais intention explicite + générée sans boilerplate.
+    @Upsert
+    suspend fun upsertAll(events: List<EventEntity>)
 
     @Query("SELECT * FROM events WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): EventEntity?
@@ -44,7 +46,7 @@ interface EventDao {
     @Query("SELECT * FROM events WHERE date > :now ORDER BY date ASC")
     suspend fun upcomingAll(now: String): List<EventEntity>
 
-    // Conservé pour compatibilité
+    // Conservé pour compatibilité avec d'éventuels usages futurs
     @Query("SELECT * FROM events WHERE date > :now AND reminderScheduled = 0 ORDER BY date ASC")
     suspend fun upcomingWithoutReminder(now: String): List<EventEntity>
 

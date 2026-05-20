@@ -35,7 +35,11 @@ class EventsViewModel @Inject constructor(
     private val _hidePassedEvents = MutableStateFlow(false)
 
     // Ticker toutes les 60s pour rafraîchir le filtre "passés" sans appel réseau.
-    // On le combine via zip dans un Flow intermédiaire pour rester sous l'arité 5 de combine().
+    private val _minuteTick: Flow<Long> = flow {
+        var tick = 0L
+        while (true) { emit(tick++); delay(60_000L) }
+    }.shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
+
     private val _rawEvents: Flow<List<Event>> = _searchQuery
         .debounce(300)
         .flatMapLatest { q ->
@@ -43,12 +47,6 @@ class EventsViewModel @Inject constructor(
             else repository.searchEvents(q)
         }
 
-    private val _minuteTick: Flow<Long> = flow {
-        var tick = 0L
-        while (true) { emit(tick++); delay(60_000L) }
-    }.shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
-
-    // Events filtrés en temps réel : on combine la liste brute + le tick + le flag hidePassedEvents
     private val _filteredEvents: Flow<List<Event>> = combine(
         _rawEvents,
         _hidePassedEvents,
@@ -75,9 +73,11 @@ class EventsViewModel @Inject constructor(
             hidePassedEvents = hideP
         )
     }.stateIn(
-        scope          = viewModelScope,
-        started        = SharingStarted.WhileSubscribed(5_000),
-        initialValue   = EventsUiState(isLoading = true)
+        scope        = viewModelScope,
+        // WhileSubscribed(5_000) : coupe la collecte 5s après que l'UI passe en arrière-plan,
+        // en cohérence avec collectAsStateWithLifecycle côté Composable.
+        started      = SharingStarted.WhileSubscribed(5_000),
+        initialValue = EventsUiState(isLoading = true)
     )
 
     fun onSearchQueryChange(q: String) { _searchQuery.value = q }
@@ -111,8 +111,8 @@ class EventsViewModel @Inject constructor(
 // ─── ViewModel préférences notifications ─────────────────────────────────────
 
 data class NotifPrefsUiState(
-    val syncIntervalHours: Float    = 6f,
-    val reminderHoursBefore: Float  = 2f,
+    val syncIntervalHours: Float      = 6f,
+    val reminderHoursBefore: Float    = 2f,
     val notificationsEnabled: Boolean = true
 )
 

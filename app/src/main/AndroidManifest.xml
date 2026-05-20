@@ -73,9 +73,14 @@
                 tools:node="remove" />
         </provider>
 
+        <!--
+            android:permission restreint les envois d'Intent externes au receiver :
+            seul le système (qui détient RECEIVE_BOOT_COMPLETED) peut le déclencher.
+        -->
         <receiver
             android:name=".workers.BootReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
