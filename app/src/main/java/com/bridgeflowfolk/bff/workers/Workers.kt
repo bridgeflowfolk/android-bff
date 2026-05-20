@@ -146,6 +146,52 @@ class SyncWorker @AssistedInject constructor(
                 request
             )
         }
+
+       suspend fun rescheduleAllReminders(
+        context: Context, 
+        eventDao: com.bridgeflowfolk.bff.data.local.EventDao, 
+        hoursBefore: Long
+    ) {
+        val workManager = WorkManager.getInstance(context)
+        val nowStr = java.time.LocalDateTime.now().toString()
+
+        // 1. Récupérer tous les événements futurs dans la base Room
+        val upcomingEvents = eventDao.upcomingAll(nowStr)
+
+        for (entity in upcomingEvents) {
+            // 2. Annuler l'ancienne alarme de cet événement
+            workManager.cancelUniqueWork("reminder_${entity.id}")
+
+            // 3. Calculer le nouveau moment où déclencher l'alarme
+            val eventDateTime = java.time.LocalDateTime.parse(entity.date)
+            val reminderDateTime = eventDateTime.minusHours(hoursBefore)
+            val delayMs = java.time.Duration.between(java.time.LocalDateTime.now(), reminderDateTime).toMillis()
+
+            // 4. Si l'événement est encore dans le futur, on reprogramme le Worker
+            if (delayMs > 0) {
+                val inputData = Data.Builder()
+                    .putString(KEY_EVENT_ID, entity.id)
+                    .putLong(KEY_HOURS_BEFORE, hoursBefore)
+                    .build()
+
+                val request = OneTimeWorkRequestBuilder<ReminderWorker>()
+                    .setInputData(inputData)
+                    .setInitialDelay(delayMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    .build()
+
+                workManager.enqueueUniqueWork(
+                    "reminder_${entity.id}",
+                    ExistingWorkPolicy.REPLACE,
+                    request
+                )
+                
+                // Mettre à jour le statut dans la base de données
+                eventDao.setReminderScheduled(entity.id, true)
+            } else {
+                // Si avec le nouveau délai, l'alarme tombe dans le passé, on l'annule en base
+                eventDao.setReminderScheduled(entity.id, false)
+            }
+        }
     }
 }
 
