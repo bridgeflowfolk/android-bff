@@ -1,6 +1,7 @@
 package com.bridgeflowfolk.bff.data.remote
 
 import retrofit2.http.GET
+import retrofit2.http.Query
 
 data class EventDto(
     val id: String,
@@ -14,5 +15,7 @@ data class EventDto(
 
 interface BffApiService {
     @GET("info.json")
-    suspend fun getEvents(): List<EventDto>
+    suspend fun getEvents(        
+        @Query("t") timestamp: Long = System.currentTimeMillis() 
+    ): List<EventDto>
 }
