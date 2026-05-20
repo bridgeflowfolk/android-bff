@@ -34,7 +34,8 @@ object DatabaseModule {
     fun provideDatabase(@ApplicationContext ctx: Context): BffDatabase =
         Room.databaseBuilder(ctx, BffDatabase::class.java, "bff.db")
             .addMigrations(MIGRATION_2_3)
-            .fallbackToDestructiveMigrationFrom(1)   // v1 → v2 était destructive (acceptable)
+            // Utilisation de l'argument nommé pour plus de clarté
+            .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1)   
             .build()
 
     @Provides fun provideEventDao(db: BffDatabase): EventDao = db.eventDao()
