@@ -3,6 +3,7 @@ package com.bridgeflowfolk.bff.workers
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import com.bridgeflowfolk.bff.data.local.EventDao
@@ -52,13 +53,19 @@ class SyncWorker @AssistedInject constructor(
     }
 
     private suspend fun scheduleReminders(reminderHours: Long) {
+        // Validation explicite : évite un comportement silencieux si la valeur
+        // dépasse la plage admissible (WorkManager min = 15 min, max raisonnable = 24h)
+        require(reminderHours in 1..24) {
+            "reminderHours doit être compris entre 1 et 24, reçu : $reminderHours"
+        }
+
         val workManager = WorkManager.getInstance(applicationContext)
         val now = LocalDateTime.now()
         val nowStr = now.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
 
-        // Tous les événements à venir, qu'ils soient déjà marqués ou non en base.
-        // On vérifie l'existence réelle du job dans WorkManager plutôt que de se fier
-        // uniquement au flag DB (qui peut être désynchronisé après reboot / clear).
+        // Tous les événements à venir — on vérifie l'état réel WorkManager
+        // plutôt que de se fier uniquement au flag DB (peut être désynchronisé
+        // après reboot / clear de données).
         val allUpcoming = eventDao.upcomingAll(nowStr)
 
         allUpcoming.forEach { entity ->
@@ -77,7 +84,7 @@ class SyncWorker @AssistedInject constructor(
             }
 
             // Ici : job absent ou terminé → (re)planifier
-            val eventTime = LocalDateTime.parse(entity.date, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            val eventTime   = LocalDateTime.parse(entity.date, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
             val reminderTime = eventTime.minusHours(reminderHours)
             val delayMs = reminderTime
                 .atZone(ZoneId.systemDefault())
@@ -96,37 +103,39 @@ class SyncWorker @AssistedInject constructor(
                     .addTag(TAG_REMINDER)
                     .build()
 
-                // APPEND_OR_REPLACE : si un job du même nom existe (ex. état FAILED/CANCELLED),
-                // il est remplacé ; s'il est ENQUEUED/RUNNING (cas normalement exclu ci-dessus),
-                // il est conservé. Evite les doublons sans tuer un job valide.
+                // APPEND_OR_REPLACE : remplace un job FAILED/CANCELLED éventuel
+                // sans tuer un job ENQUEUED/RUNNING (exclu ci-dessus)
                 workManager.enqueueUniqueWork(
                     uniqueName,
                     ExistingWorkPolicy.APPEND_OR_REPLACE,
                     reminderWork
                 )
                 eventDao.markReminderScheduled(entity.id)
+                Log.d(TAG, "Rappel planifié pour ${entity.id} dans ${delayMs / 60_000} min")
             } else {
-                // La fenêtre de rappel est passée mais l'événement est encore à venir :
-                // on marque quand même scheduled pour ne pas boucler dessus.
+                // Fenêtre passée mais événement à venir : marquer pour ne pas boucler
                 eventDao.markReminderScheduled(entity.id)
             }
         }
     }
 
     companion object {
-        const val KEY_EVENT_ID     = "event_id"
-        const val KEY_HOURS_BEFORE = "hours_before"
-        const val WORK_NAME        = "bff_sync_periodic"
-        const val TAG_REMINDER     = "bff_reminder"
+        private const val TAG           = "SyncWorker"
+        const val KEY_EVENT_ID          = "event_id"
+        const val KEY_HOURS_BEFORE      = "hours_before"
+        const val WORK_NAME             = "bff_sync_periodic"
+        const val TAG_REMINDER          = "bff_reminder"
 
         fun schedule(context: Context, intervalHours: Long = 6L) {
+            require(intervalHours in 1..24) {
+                "intervalHours doit être compris entre 1 et 24, reçu : $intervalHours"
+            }
+
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
 
-            val request = PeriodicWorkRequestBuilder<SyncWorker>(
-                intervalHours.coerceIn(1L, 24L), TimeUnit.HOURS
-            )
+            val request = PeriodicWorkRequestBuilder<SyncWorker>(intervalHours, TimeUnit.HOURS)
                 .setConstraints(constraints)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
                 .build()
@@ -164,6 +173,8 @@ class ReminderWorker @AssistedInject constructor(
 }
 
 // ─── BootReceiver ─────────────────────────────────────────────────────────────
+// Déclaré avec android:permission="android.permission.RECEIVE_BOOT_COMPLETED"
+// dans le Manifest → seul le système peut l'invoquer.
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {

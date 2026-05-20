@@ -30,16 +30,16 @@ class EventRepositoryImpl @Inject constructor(
         dao.search(query).map { list -> list.map { it.toDomain() } }
 
     override suspend fun syncFromNetwork(): List<String> {
-        val remote = api.getEvents()
+        val remote      = api.getEvents()
         val existingIds = dao.allIds().toSet()
 
         val entities = remote.map { dto ->
-            val existing = dao.findById(dto.id)
-            // Remettre reminderScheduled à false si la date a changé ou si c'est un nouvel événement,
+            val existing    = dao.findById(dto.id)
+            // Réinitialise reminderScheduled si la date a changé ou si c'est un nouvel événement,
             // afin que SyncWorker replanifie un rappel sur la nouvelle date.
             val dateChanged = existing != null && existing.date != dto.date
             if (dateChanged) {
-                // Annuler le reminder WorkManager planifié sur l'ancienne date
+                // Annule le reminder WorkManager planifié sur l'ancienne date
                 WorkManager.getInstance(context).cancelUniqueWork("reminder_${dto.id}")
             }
             dto.toEntity().copy(
@@ -48,6 +48,7 @@ class EventRepositoryImpl @Inject constructor(
                                     else existing.reminderScheduled
             )
         }
+        // @Upsert en Room 2.7 : ne retourne plus List<Long>, appel sans valeur de retour
         dao.upsertAll(entities)
 
         return remote.map { it.id }.filter { it !in existingIds }
