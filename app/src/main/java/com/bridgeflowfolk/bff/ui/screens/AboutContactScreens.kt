@@ -6,6 +6,7 @@ import android.util.Log
 import android.net.Uri
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
@@ -46,19 +47,26 @@ private fun Context.startSafe(intent: Intent) {
 
 @Composable
 fun AboutScreen() {
+    var webView: WebView? by remember { mutableStateOf(null) }
+
+    // Intercepte le bouton retour physique d'Android si la WebView peut reculer
+    BackHandler(enabled = webView?.canGoBack() == true) {
+        webView?.goBack()
+    }
+
     AndroidView(
         factory = { ctx ->
             WebView(ctx).apply {
-                webViewClient          = WebViewClient()
-                settings.javaScriptEnabled  = true
-                settings.domStorageEnabled  = true
+                webViewClient = WebViewClient()
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
                 loadUrl("https://bridgeflowfolk.github.io/apropos.html")
+                webView = this // Sauvegarde la référence
             }
         },
         modifier = Modifier.fillMaxSize()
     )
 }
-
 // ─── Contact ──────────────────────────────────────────────────────────────────
 
 @Composable
