@@ -208,20 +208,21 @@ fun EventsScreen(viewModel: EventsViewModel = hiltViewModel()) {
                         modifier            = Modifier.fillMaxSize()
                     ) {
                         itemsIndexed(state.events, key = { _, e -> e.id }) { index, event ->
-                            // Chaque carte entre avec un léger décalage selon son index
-                            // → effet de cascade sobre, pas de rebond excessif
-                            val visibleState = remember {
-                                MutableTransitionState(false).apply { targetState = true }
-                            }
-                            AnimatedVisibility(
-                                visibleState = visibleState,
-                                enter = fadeIn(tween(300, delayMillis = (index * 40).coerceAtMost(240))) +
-                                        slideInVertically(
-                                            tween(300, delayMillis = (index * 40).coerceAtMost(240)),
-                                            initialOffsetY = { it / 5 }
-                                        )
-                            ) {
-                                EventCard(event = event)
+                            // AnimatedVisibility requiert un ColumnScope comme receiver implicite,
+                            // indisponible dans LazyItemScope. On encapsule dans un Column léger
+                            // pour fournir ce contexte sans coût de layout supplémentaire.
+                            val delay = (index * 40).coerceAtMost(240)
+                            Column {
+                                AnimatedVisibility(
+                                    visible = true,
+                                    enter   = fadeIn(tween(300, delayMillis = delay)) +
+                                              slideInVertically(
+                                                  tween(300, delayMillis = delay),
+                                                  initialOffsetY = { it / 5 }
+                                              )
+                                ) {
+                                    EventCard(event = event)
+                                }
                             }
                         }
                     }
