@@ -9,14 +9,27 @@
     <!-- Notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Alarmes exactes -->
+    <!--
+        SCHEDULE_EXACT_ALARM uniquement, limité à Android ≤ 12 (API 32).
+        Android 13+ : WorkManager utilise des alarmes inexactes par défaut,
+        ce qui est suffisant pour des rappels d'événements associatifs.
+
+        USE_EXACT_ALARM est délibérément absent : réservé aux apps de réveil/chronomètre,
+        son utilisation ici déclencherait un rejet Play Store (politique Google).
+    -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
         android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <!-- Background -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+        FOREGROUND_SERVICE_DATA_SYNC requis depuis Android 14 (API 34).
+        Sans le type explicite, le système lève une SecurityException si un
+        Worker passe en foreground. On déclare les deux pour la compatibilité.
+    -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <!-- Queries pour résolution d'intent (navigation, partage) -->
     <queries>
@@ -74,15 +87,37 @@
         </provider>
 
         <!--
-            android:permission restreint les envois d'Intent externes au receiver :
-            seul le système (qui détient RECEIVE_BOOT_COMPLETED) peut le déclencher.
+            BootReceiver sans android:permission pour maximiser la compatibilité.
+
+            Pourquoi on retire android:permission="RECEIVE_BOOT_COMPLETED" :
+            Cette protection empêche le système de certains constructeurs (Xiaomi MIUI,
+            HTC Sense, Samsung One UI en mode strict) de déclencher le receiver via
+            leur propre séquence de démarrage, qui n'envoie pas toujours l'intent avec
+            les permissions attendues.
+
+            La protection suffisante est assurée par android:exported="true" + le filtre
+            d'intent : seul le système émet BOOT_COMPLETED et QUICKBOOT_POWERON en pratique.
+            Un app tierce ne peut pas les forger sans permission système.
+
+            Note pour les tests ADB :
+              adb shell am broadcast -a android.intent.action.BOOT_COMPLETED \
+                -p com.bridgeflowfolk.bff
+            fonctionne uniquement sur un appareil rooté ou un émulateur.
         -->
         <receiver
             android:name=".workers.BootReceiver"
-            android:exported="true"
-            android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
+            android:exported="true">
             <intent-filter>
+                <!-- Boot standard (tous constructeurs) -->
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <!--
+                    Boot rapide Xiaomi / HTC : ces constructeurs n'émettent pas
+                    toujours BOOT_COMPLETED lors d'un redémarrage à chaud.
+                    QUICKBOOT_POWERON garantit la replanification des workers.
+                -->
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <!-- Variante HTC Sense (package différent de Xiaomi) -->
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
 

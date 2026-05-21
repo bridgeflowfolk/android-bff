@@ -18,17 +18,23 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.bridgeflowfolk.bff.ui.InAppNotificationViewModel
 import com.bridgeflowfolk.bff.ui.screens.AboutScreen
 import com.bridgeflowfolk.bff.ui.screens.ContactScreen
 import com.bridgeflowfolk.bff.ui.screens.EventsScreen
 import com.bridgeflowfolk.bff.ui.screens.GameScreen
+import com.bridgeflowfolk.bff.ui.screens.NotificationBellIcon
+import com.bridgeflowfolk.bff.ui.screens.NotificationsBottomSheet
 import com.bridgeflowfolk.bff.ui.theme.BffTheme
+import com.bridgeflowfolk.bff.workers.NotifSyncWorker
 import com.bridgeflowfolk.bff.workers.SyncWorker
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.serialization.Serializable
@@ -38,9 +44,6 @@ import kotlinx.serialization.Serializable
 @Serializable object RouteGame
 @Serializable object RouteAbout
 @Serializable object RouteContact
-
-// Index pour déterminer le sens de la transition (gauche ↔ droite)
-private val routeOrder = listOf(RouteEvents, RouteGame, RouteAbout, RouteContact)
 
 private data class BottomNavItem<T : Any>(
     val route: T,
@@ -55,14 +58,20 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         SyncWorker.schedule(this)
+        NotifSyncWorker.schedule(this)
 
         setContent {
             BffTheme {
                 RequestNotificationPermission()
 
-                val navController = rememberNavController()
-                val navBackStack  by navController.currentBackStackEntryAsState()
-                val currentDest   = navBackStack?.destination
+                val navController   = rememberNavController()
+                val navBackStack    by navController.currentBackStackEntryAsState()
+                val currentDest     = navBackStack?.destination
+
+                // ViewModel notifications in-app partagé au niveau Activity
+                val notifViewModel: InAppNotificationViewModel = hiltViewModel()
+                val notifState     by notifViewModel.uiState.collectAsStateWithLifecycle()
+                var showNotifSheet by remember { mutableStateOf(false) }
 
                 val bottomItems = listOf(
                     BottomNavItem(RouteEvents,  "Événements") { Icon(Icons.Default.CalendarMonth, "Événements") },
@@ -70,15 +79,6 @@ class MainActivity : ComponentActivity() {
                     BottomNavItem(RouteAbout,   "À propos")   { Icon(Icons.Default.Info,          "À propos") },
                     BottomNavItem(RouteContact, "Contact")    { Icon(Icons.Default.Phone,         "Contact") }
                 )
-
-                // Index de la destination courante pour calculer le sens de glissement
-                val currentIndex by remember(currentDest) {
-                    derivedStateOf {
-                        routeOrder.indexOfFirst { route ->
-                            currentDest?.hasRoute(route::class) == true
-                        }.coerceAtLeast(0)
-                    }
-                }
 
                 Scaffold(
                     topBar = {
@@ -90,6 +90,13 @@ class MainActivity : ComponentActivity() {
                                     color = MaterialTheme.colorScheme.onPrimary
                                 )
                             },
+                            actions = {
+                                // ── Cloche avec badge non-lus ─────────────────
+                                NotificationBellIcon(
+                                    unreadCount = notifState.unreadCount,
+                                    onClick     = { showNotifSheet = true }
+                                )
+                            },
                             colors = TopAppBarDefaults.topAppBarColors(
                                 containerColor = MaterialTheme.colorScheme.primary
                             )
@@ -97,7 +104,7 @@ class MainActivity : ComponentActivity() {
                     },
                     bottomBar = {
                         NavigationBar {
-                            bottomItems.forEachIndexed { index, item ->
+                            bottomItems.forEach { item ->
                                 val selected = currentDest
                                     ?.hierarchy
                                     ?.any { it.hasRoute(item.route::class) } == true
@@ -122,10 +129,6 @@ class MainActivity : ComponentActivity() {
                         navController    = navController,
                         startDestination = RouteEvents,
                         modifier         = Modifier.padding(innerPadding),
-                        // ── Transitions sobres : glissement horizontal directionnel ──
-                        // La direction (gauche/droite) est calculée depuis currentIndex
-                        // capturé via la closure — sobre et cohérent avec les conventions
-                        // Material3 (pas de fade brutal, pas de zoom excessif).
                         enterTransition  = { slideInHorizontally(tween(280)) { it / 3 } + fadeIn(tween(280)) },
                         exitTransition   = { slideOutHorizontally(tween(280)) { -it / 3 } + fadeOut(tween(200)) },
                         popEnterTransition  = { slideInHorizontally(tween(280)) { -it / 3 } + fadeIn(tween(280)) },
@@ -136,6 +139,14 @@ class MainActivity : ComponentActivity() {
                         composable<RouteAbout>   { AboutScreen() }
                         composable<RouteContact> { ContactScreen() }
                     }
+                }
+
+                // ── Panneau notifications (BottomSheet) ───────────────────────
+                if (showNotifSheet) {
+                    NotificationsBottomSheet(
+                        onDismiss      = { showNotifSheet = false },
+                        viewModel      = notifViewModel
+                    )
                 }
             }
         }

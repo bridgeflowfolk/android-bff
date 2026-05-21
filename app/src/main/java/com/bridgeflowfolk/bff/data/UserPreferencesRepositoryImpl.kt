@@ -23,16 +23,18 @@ class UserPreferencesRepositoryImpl @Inject constructor(
 ) : UserPreferencesRepository {
 
     private object Keys {
-        val SYNC_INTERVAL        = floatPreferencesKey("sync_interval_hours")
-        val REMINDER_BEFORE      = floatPreferencesKey("reminder_hours_before")
-        val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
+        val SYNC_INTERVAL           = floatPreferencesKey("sync_interval_hours")
+        val REMINDER_BEFORE         = floatPreferencesKey("reminder_hours_before")
+        val NOTIFICATIONS_ENABLED   = booleanPreferencesKey("notifications_enabled")
+        val NOTIF_FETCH_INTERVAL    = floatPreferencesKey("notif_fetch_interval_hours")
     }
 
     override val prefsFlow: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
         UserPreferences(
-            syncIntervalHours      = prefs[Keys.SYNC_INTERVAL]          ?: 6f,
-            reminderHoursBefore    = prefs[Keys.REMINDER_BEFORE]        ?: 2f,
-            notificationsEnabled   = prefs[Keys.NOTIFICATIONS_ENABLED]  ?: true
+            syncIntervalHours       = prefs[Keys.SYNC_INTERVAL]         ?: 6f,
+            reminderHoursBefore     = prefs[Keys.REMINDER_BEFORE]       ?: 2f,
+            notificationsEnabled    = prefs[Keys.NOTIFICATIONS_ENABLED] ?: true,
+            notifFetchIntervalHours = prefs[Keys.NOTIF_FETCH_INTERVAL]  ?: 4f
         )
     }
 
@@ -46,5 +48,9 @@ class UserPreferencesRepositoryImpl @Inject constructor(
 
     override suspend fun setNotificationsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.NOTIFICATIONS_ENABLED] = enabled }
+    }
+
+    override suspend fun setNotifFetchInterval(hours: Float) {
+        context.dataStore.edit { it[Keys.NOTIF_FETCH_INTERVAL] = hours.coerceIn(1f, 24f) }
     }
 }

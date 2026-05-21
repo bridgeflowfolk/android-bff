@@ -19,7 +19,6 @@ class BffApplication : Application(), Configuration.Provider {
         createNotificationChannels()
     }
 
-    /** WorkManager configuré avec Hilt (injection dans les Workers) */
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -29,7 +28,6 @@ class BffApplication : Application(), Configuration.Provider {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
 
-            // Canal : nouveaux événements
             NotificationChannel(
                 CHANNEL_NEW_EVENTS,
                 "Nouveaux événements",
@@ -39,20 +37,30 @@ class BffApplication : Application(), Configuration.Provider {
                 manager.createNotificationChannel(this)
             }
 
-            // Canal : rappels avant événement
             NotificationChannel(
                 CHANNEL_REMINDERS,
                 "Rappels d'événements",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Rappel automatique 2h avant un événement"
+                description = "Rappel automatique avant un événement"
+                manager.createNotificationChannel(this)
+            }
+
+            // Canal dédié aux informations publiées via la cloche
+            NotificationChannel(
+                CHANNEL_IN_APP_NOTIFS,
+                "Informations BFF",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Informations générales publiées par l'association"
                 manager.createNotificationChannel(this)
             }
         }
     }
 
     companion object {
-        const val CHANNEL_NEW_EVENTS = "bff_new_events"
-        const val CHANNEL_REMINDERS = "bff_reminders"
+        const val CHANNEL_NEW_EVENTS    = "bff_new_events"
+        const val CHANNEL_REMINDERS     = "bff_reminders"
+        const val CHANNEL_IN_APP_NOTIFS = "bff_in_app_notifs"
     }
 }
