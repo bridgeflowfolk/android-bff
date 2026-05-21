@@ -92,6 +92,10 @@ interface InAppNotificationDao {
 
     @Query("UPDATE in_app_notifications SET isRead = 1")
     suspend fun markAllRead()
+
+    /** Supprime les entrées dont l'id n'est plus dans le JSON distant. */
+    @Query("DELETE FROM in_app_notifications WHERE id NOT IN (:remoteIds)")
+    suspend fun deleteRemovedIds(remoteIds: List<String>)
 }
 
 // Version 4 : ajout table in_app_notifications (migration DDL explicite)

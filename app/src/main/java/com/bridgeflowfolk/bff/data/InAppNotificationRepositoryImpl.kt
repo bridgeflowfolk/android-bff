@@ -23,10 +23,10 @@ class InAppNotificationRepositoryImpl @Inject constructor(
 
     /**
      * Synchronise les notifications depuis le réseau.
-     * - Les notifications existantes conservent leur état isRead et receivedAt.
-     * - Une notification supprimée du JSON reste visible (historique local).
-     * - Si le réseau est absent ou en erreur → retour silencieux, pas de crash.
-     * - Convention : pour modifier le contenu d'une notif, l'admin doit changer son id.
+     * - Les nouvelles entrées sont insérées (isRead=false, receivedAt=now).
+     * - Les entrées existantes conservent leur état isRead et receivedAt.
+     * - Les entrées absentes du JSON distant sont supprimées (suppression intentionnelle par l'admin).
+     * - Si le réseau est absent ou en erreur → retour silencieux, aucune suppression locale.
      */
     override suspend fun syncFromNetwork(): List<String> {
         val remote = try {
@@ -36,10 +36,14 @@ class InAppNotificationRepositoryImpl @Inject constructor(
             return emptyList()
         }
 
+        val remoteIds   = remote.map { it.id }
         val existingIds = dao.allIds().toSet()
         val now         = System.currentTimeMillis()
 
-        // Seules les nouvelles notifications sont insérées (on ne touche pas aux existantes)
+        // 1. Supprimer ce qui n'est plus dans le JSON distant
+        dao.deleteRemovedIds(remoteIds)
+
+        // 2. Insérer uniquement les nouvelles entrées (les existantes gardent isRead/receivedAt)
         val newEntities = remote
             .filter { it.id !in existingIds }
             .map { dto ->
