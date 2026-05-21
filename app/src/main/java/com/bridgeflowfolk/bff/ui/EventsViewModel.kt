@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bridgeflowfolk.bff.domain.Event
 import com.bridgeflowfolk.bff.domain.EventRepository
+import com.bridgeflowfolk.bff.domain.InAppNotificationRepository
 import com.bridgeflowfolk.bff.domain.UserPreferencesRepository
 import com.bridgeflowfolk.bff.workers.NotifSyncWorker
 import com.bridgeflowfolk.bff.workers.SyncWorker
@@ -12,6 +13,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -30,6 +32,7 @@ data class EventsUiState(
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class EventsViewModel @Inject constructor(
     private val repository: EventRepository,
+    private val notifRepository: InAppNotificationRepository,
     private val prefsRepository: UserPreferencesRepository
 ) : ViewModel() {
 
@@ -90,7 +93,11 @@ class EventsViewModel @Inject constructor(
         _isLoading.value = true
         _error.value     = null
         try {
-            repository.syncFromNetwork()
+            // Fetch événements et notifications en parallèle — un seul spinner pour les deux
+            val eventsDeferred = viewModelScope.async { repository.syncFromNetwork() }
+            val notifsDeferred = viewModelScope.async { notifRepository.syncFromNetwork() }
+            eventsDeferred.await()
+            notifsDeferred.await()  // silencieux si pas de réseau (géré dans le repo)
         } catch (e: Exception) {
             _error.value = "Impossible de synchroniser. Vérifiez votre connexion."
         } finally {
