@@ -38,8 +38,15 @@ class SyncWorker @AssistedInject constructor(
             val newIds = repository.syncFromNetwork()
 
             if (prefs.notificationsEnabled && newIds.isNotEmpty()) {
-                val newEvents = newIds.mapNotNull { eventDao.findById(it) }.map { it.toDomain() }
-                notificationHelper.notifyNewEvents(newEvents)
+                val now       = LocalDateTime.now()
+                // On ne notifie que les événements à venir : évite le spam au premier
+                // lancement après vidage des données (tous les événements sont "nouveaux"
+                // pour la base vide, mais les passés ne méritent pas de notification).
+                val newEvents = newIds
+                    .mapNotNull { eventDao.findById(it) }
+                    .map { it.toDomain() }
+                    .filter { it.dateTime.isAfter(now) }
+                if (newEvents.isNotEmpty()) notificationHelper.notifyNewEvents(newEvents)
             }
 
             if (prefs.notificationsEnabled) {
