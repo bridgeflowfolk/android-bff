@@ -4,8 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import android.net.Uri
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
@@ -35,26 +37,64 @@ import com.bridgeflowfolk.bff.ui.theme.BffColors
 import com.bridgeflowfolk.bff.ui.components.hapticTick
 import kotlin.math.roundToInt
 
-
 // ─── Lancement d'Intent sécurisé (local) ─────────────────────────────────────
+
 private fun Context.startSafe(intent: Intent) {
     try { startActivity(intent) }
     catch (e: Exception) { Log.w("BFF", "startActivity échoué : ${e.message}") }
 }
 
-// ─── À propos (WebView) ───────────────────────────────────────────────────────
+// ─── À propos (WebView avec gestion back Android) ────────────────────────────
 
+/**
+ * WebView avec gestion correcte du bouton retour Android :
+ * - Si la WebView peut reculer dans son historique → on recule dans la WebView.
+ * - Sinon → comportement par défaut (remonte dans la navigation Compose).
+ *
+ * On passe webViewRef via AndroidView factory + update pour avoir une référence
+ * stable sans recréer la WebView.
+ */
 @Composable
 fun AboutScreen() {
+    val webViewRef  = remember { mutableStateOf<WebView?>(null) }
+    var canGoBack   by remember { mutableStateOf(false) }
+
+    // BackHandler actif uniquement quand la WebView a un historique à dépiler.
+    // Quand canGoBack = false, l'événement remonte à la navigation Compose normalement.
+    BackHandler(enabled = canGoBack) {
+        webViewRef.value?.goBack()
+    }
+
     AndroidView(
         factory = { ctx ->
             WebView(ctx).apply {
-                webViewClient          = WebViewClient()
-                settings.javaScriptEnabled  = true
-                settings.domStorageEnabled  = true
+                webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(
+                        view: WebView,
+                        request: WebResourceRequest
+                    ): Boolean {
+                        // Les liens vers d'autres domaines s'ouvrent dans le navigateur système
+                        val url = request.url.toString()
+                        return if (url.startsWith("https://bridgeflowfolk.github.io")) {
+                            false // navigation interne → WebView gère
+                        } else {
+                            try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                            catch (e: Exception) { Log.w("AboutScreen", "URL ignorée : $url") }
+                            true
+                        }
+                    }
+
+                    override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
+                        // Mise à jour réactive du flag → active/désactive le BackHandler
+                        canGoBack = view.canGoBack()
+                    }
+                }
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
                 loadUrl("https://bridgeflowfolk.github.io/apropos.html")
-            }
+            }.also { webViewRef.value = it }
         },
+        update = { wv -> webViewRef.value = wv },
         modifier = Modifier.fillMaxSize()
     )
 }
@@ -159,7 +199,6 @@ fun ContactScreen(prefsViewModel: NotifPrefsViewModel = hiltViewModel()) {
             onToggle = { ctx.hapticTick(); prefsViewModel.setNotificationsEnabled(it) }
         )
 
-        // Sliders animés : apparition/disparition fluide selon le toggle
         AnimatedVisibility(
             visible = prefs.notificationsEnabled,
             enter   = expandVertically(tween(300)) + fadeIn(tween(300)),
@@ -168,7 +207,7 @@ fun ContactScreen(prefsViewModel: NotifPrefsViewModel = hiltViewModel()) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 NotifSlider(
                     icon          = Icons.Default.Schedule,
-                    label         = "Vérification toutes les",
+                    label         = "Vérification des événements",
                     value         = prefs.syncIntervalHours,
                     onValueChange = { prefsViewModel.setSyncInterval(it) },
                     valueRange    = 1f..24f,
@@ -183,6 +222,15 @@ fun ContactScreen(prefsViewModel: NotifPrefsViewModel = hiltViewModel()) {
                     valueRange    = 1f..24f,
                     unit          = "h",
                     description   = "Vous serez notifié X heures avant le début"
+                )
+                NotifSlider(
+                    icon          = Icons.Default.Notifications,
+                    label         = "Vérification des informations",
+                    value         = prefs.notifFetchIntervalHours,
+                    onValueChange = { prefsViewModel.setNotifFetchInterval(it) },
+                    valueRange    = 1f..24f,
+                    unit          = "h",
+                    description   = "Fréquence de récupération des nouvelles informations (cloche)"
                 )
             }
         }
@@ -218,11 +266,10 @@ private fun NotificationsToggle(enabled: Boolean, onToggle: (Boolean) -> Unit) {
                 verticalAlignment     = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Icône animée entre les deux états
                 Crossfade(
-                    targetState = enabled,
+                    targetState   = enabled,
                     animationSpec = tween(200),
-                    label = "notif_icon"
+                    label         = "notif_icon"
                 ) { on ->
                     Icon(
                         imageVector        = if (on) Icons.Default.Notifications else Icons.Default.NotificationsOff,
@@ -253,6 +300,14 @@ private fun NotificationsToggle(enabled: Boolean, onToggle: (Boolean) -> Unit) {
 }
 
 // ─── Slider de préférence ─────────────────────────────────────────────────────
+//
+// Correction du bug original :
+//   remember(value) → la valeur locale était réinitialisée à chaque recomposition
+//   déclenchée par un état parent, ce qui rendait le glissement instable.
+//
+// Solution : état local indépendant, synchronisé avec `value` uniquement si la
+// différence dépasse 0.5h (évite l'écrasement pendant le glissement).
+// onValueChangeFinished persiste en DataStore ; onValueChange ne touche que l'état local.
 
 @Composable
 private fun NotifSlider(
@@ -264,7 +319,17 @@ private fun NotifSlider(
     unit: String,
     description: String
 ) {
-    var sliderValue by remember(value) { mutableFloatStateOf(value) }
+    // État local indépendant — initialisé une fois, pas re-derivé de `value`
+    var sliderValue by remember { mutableFloatStateOf(value) }
+
+    // Synchronise l'état local si la valeur externe change significativement
+    // (ex: chargement initial depuis DataStore, reset externe).
+    // Le seuil de 0.4f évite de perturber le glissement en cours.
+    LaunchedEffect(value) {
+        if (kotlin.math.abs(value - sliderValue) > 0.4f) {
+            sliderValue = value
+        }
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
